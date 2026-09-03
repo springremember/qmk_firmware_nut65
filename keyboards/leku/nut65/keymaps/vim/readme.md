@@ -69,16 +69,17 @@ Vim 模式**默认开启**，开机即处于 Normal 模式。可通过 `Fn` + `C
 - `/` / `?` — 调用宿主搜索（Ctrl+F）
 - `Enter` — 透传（发送真实 Enter）
 
-## 三、数字键长按出 F 区（仅 Insert 模式、base 层）
+## 三、F 区：_GO 层（按住 grave 键切换）
 
-| 操作 | 效果 |
+键盘 `\` 位置右侧的 `grave` 键（`~`/`` ` `` 原位置，`_BL` 第 2 行最右）改为 **按住时切换到 _GO 层**，松开回归原层：
+
+| _GO 层键位 | 输出 |
 | :--- | :--- |
-| 短按数字 `1`~`0` | 输入数字 |
-| 长按数字 `1`~`0`（200ms） | F1~F10 |
-| `Ctrl` + 数字 | Ctrl+F1~Ctrl+F10 |
+| `Esc` 位置（原 grave 键位） | `` ` ``（Shift= `~`） |
+| `1` `2` `…` `0` `-` `=` | F1 F2 … F10 F11 F12 |
 
+> 其余 _GO 层键位继承 base 层。Insert 模式下数字键不再长按出 F 区（已取消），普通数字输入即可；`Ctrl` + 数字在 Insert 模式仍映射为 Ctrl+F1~F10。
 > 说明：`Fn` + 数字（layer 1）仍是厂商原厂的 F1~F12，未做任何改动。
-> Normal 模式下数字键是计数器，不做 F 区长按。
 
 ## 四、Vim 状态指示（RGB）
 
@@ -91,14 +92,15 @@ Vim 模式**默认开启**，开机即处于 Normal 模式。可通过 `Fn` + `C
 | Visual / Visual Line | 紫 |
 | Vim 关闭（透传） | 红 |
 
-跟随模式色的键位灯（满亮）：`Caps`、`Esc`、`Delete`（原 Insert 位）、`1`、`3`、`6`、`7`、`9`。
+跟随模式色的键位灯（满亮）：`Caps`、`Esc`、`Delete`（原 Insert 位）。
 底部灯条及侧灯以 7% 亮度显示同一模式色；进入 `R`（替换模式）时底部灯条切换为**橙色**。
 
 ## 五、与厂商固件的差异
 
 键盘层定义（keymap）中：
 - `_FL`（win FN 层）、`_MBL` / `_MFL`（mac 层）、`_DEFA`：与厂商默认**逐键一致，未改动**
-- `_BL`（win Base 层）仅按用户要求改动四处键位：`Insert→Delete`、`Delete→\`~\``（grave）、`PageUp→KC_WFWD`、`PageDown→KC_WBAK`，其余一致
+- `_BL`（win Base 层）按用户要求改动键位：`Insert→Delete`、原 `Delete`（grave 位）改为**按住切 _GO 层**、`PageUp→KC_WFWD`、`PageDown→KC_WBAK`，其余一致
+- 新增 `_GO` 层（F 区 + `` ` ``，见上文；keyboard.json 动态层数相应为 6）
 
 所有 Vim 功能均为键码拦截实现，不新增/改造任何层。
 

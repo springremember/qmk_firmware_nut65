@@ -14,8 +14,5 @@
 #define BETTER_VISUAL_MODE
 
 /* ===== custom settings ===== */
-// Number key long-press threshold (ms) before emitting the F-row key
-#define NUM_HOLD_TIME 200
-
 // RGB matrix LED index used to indicate the current vim mode (Caps key position)
 #define VIM_LED_INDEX 6
