@@ -207,6 +207,30 @@ bool process_normal_mode_user(uint16_t keycode, const keyrecord_t *record) {
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    // Esc first, before anything else can consume it. Normal & Insert mode:
+    // send a real Esc to the host and DO NOT switch modes. Only Visual modes
+    // (qmk-vim native exit) and Replace mode are special.
+    if (keycode == KC_ESC && vim_mode_enabled()) {
+        if (record->event.pressed) {
+            if (get_vim_mode() == VISUAL_MODE || get_vim_mode() == VISUAL_LINE_MODE) {
+                // real Esc handed to qmk-vim to leave visual selection
+                esc_visual_exit = true;
+            } else if (replace_active) {
+                normal_mode(); // leave replace mode
+                return false;
+            } else {
+                esc_visual_exit = false;
+                tap_code(KC_ESC); // plain Esc: host acts, vim mode unchanged
+                return false;
+            }
+        } else {
+            if (esc_visual_exit) {
+                esc_visual_exit = false;
+            }
+            return false;
+        }
+    }
+
     // Caps: press = switch to Normal; Fn+Caps = toggle vim
     if (keycode == KC_CAPS) {
         bool fn_active = IS_LAYER_ON(_FL) || IS_LAYER_ON(_MFL);
@@ -226,26 +250,6 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 #endif
         }
         return false;
-    }
-
-    // Esc: Visual/VisualLine -> qmk-vim native exit; in replace mode -> back to
-    // Normal; otherwise plain Esc
-    if (keycode == KC_ESC && vim_mode_enabled()) {
-        if (record->event.pressed) {
-            if (get_vim_mode() == VISUAL_MODE || get_vim_mode() == VISUAL_LINE_MODE) {
-                esc_visual_exit = true; // fall through to process_vim_mode
-            } else if (replace_active) {
-                normal_mode(); // leave replace mode
-                return false;
-            } else {
-                esc_visual_exit = false;
-                tap_code(KC_ESC);
-                return false;
-            }
-        } else {
-            esc_visual_exit = false;
-            return false;
-        }
     }
 
     if (!process_vim_mode(keycode, record)) {
