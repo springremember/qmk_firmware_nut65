@@ -23,10 +23,8 @@ static bool process_g_cmd(uint16_t keycode, const keyrecord_t *record) {
     if (record->event.pressed) {
         switch (keycode) {
             case KC_G:
-                // this doesn't quite work for all programs
-                tap_code16(VCMD(KC_A));
-                wait_ms(200);
-                tap_code(KC_UP);
+                // gg: go to top of the document
+                tap_code16(LCTL(KC_HOME));
                 break;
             default:
                 break;
@@ -200,10 +198,8 @@ bool process_normal_mode(uint16_t keycode, const keyrecord_t *record) {
 #ifdef VIM_G_MOTIONS
             // g motions
             case LSFT(KC_G):
-                // this doesn't quite work for all programs
-                tap_code16(VCMD(KC_A));
-                wait_ms(200);
-                tap_code(KC_DOWN);
+                // G: go to bottom of the document
+                tap_code16(LCTL(KC_END));
                 NO_RECORD_ACTION();
                 break;
             case KC_G:
