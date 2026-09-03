@@ -104,13 +104,13 @@ bool process_normal_mode(uint16_t keycode, const keyrecord_t *record) {
                 break;
             case LSFT(KC_O):
                 VIM_HOME();
-                tap_code(KC_ENTER);
+                tap_code16(LSFT(KC_ENTER)); // new line above (Shift+Enter)
                 tap_code(KC_UP);
                 insert_mode();
                 break;
             case KC_O:
                 VIM_END();
-                tap_code(KC_ENTER);
+                tap_code16(LSFT(KC_ENTER)); // new line below (Shift+Enter)
                 insert_mode();
                 break;
             // actions
