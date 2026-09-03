@@ -399,19 +399,36 @@ void housekeeping_task_user(void) {
         if (cur != PW_DEVS_USB) pw_last_wls = cur;
     }
 
-    // Debounced USB cable auto switch: plug -> wired, unplug -> last wireless
+    // USB cable auto switch with sleep suppression.
+    // The vendor stack puts the board straight to sleep the moment the USB
+    // cable is removed; while the device is still on DEVS_USB but the cable is
+    // gone we actively cancel that sleep and hop back to wireless shortly.
     bool cable = !pw_no_cable();
     if (!pw_off) {
-        if (cable != pw_cable_last) {
+        uint8_t cur = wireless_get_current_devs();
+        if (cur == PW_DEVS_USB && !cable) {
+            // unplugged but still in USB device: block pending sleep now
+            lpwr_set_timeout_manual(false);
+            lpwr_set_state(0); // LPWR_NORMAL, cancel any presleep/stop
+            if (pw_cable_last) { // newly unplugged edge
+                pw_cable_last  = false;
+                pw_cable_timer = timer_read32();
+            }
+            if (pw_cable_timer && timer_elapsed32(pw_cable_timer) >= 80) {
+                pw_cable_timer = 0;
+                wireless_devs_change(PW_DEVS_USB, pw_last_wls, false); // back to wireless
+            }
+        } else {
             pw_cable_last = cable;
-            pw_cable_timer = timer_read32();
-        } else if (pw_cable_timer && timer_elapsed32(pw_cable_timer) >= 200) {
-            pw_cable_timer = 0;
-            uint8_t cur = wireless_get_current_devs();
             if (cable && cur != PW_DEVS_USB) {
-                wireless_devs_change(cur, PW_DEVS_USB, false);
-            } else if (!cable && cur == PW_DEVS_USB) {
-                wireless_devs_change(PW_DEVS_USB, pw_last_wls, false);
+                // plugged in while on wireless -> switch to wired
+                if (pw_cable_timer == 0) pw_cable_timer = timer_read32();
+                if (timer_elapsed32(pw_cable_timer) >= 80) {
+                    pw_cable_timer = 0;
+                    wireless_devs_change(cur, PW_DEVS_USB, false);
+                }
+            } else {
+                pw_cable_timer = 0;
             }
         }
     }
