@@ -156,8 +156,10 @@ static void enter_replace_mode(void) {
     process_func   = process_replace_mode;
 }
 
-// Called by qmk-vim whenever Normal mode is entered, keeps state in sync
-__attribute__((weak)) void normal_mode_user(void) {
+// Called by qmk-vim whenever Normal mode is entered, keeps state in sync.
+// Strong symbol so it overrides qmk-vim's weak default (two weak symbols would
+// make the linker pick either one).
+void normal_mode_user(void) {
     replace_active = false;
 }
 
