@@ -265,12 +265,14 @@ bool process_normal_mode_user(uint16_t keycode, const keyrecord_t *record) {
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
-    // ---- Power on/off combo: hold original-Delete(_GO) key + Space >= 3s,
-    // only with no USB cable. Single key presses keep their normal role. ----
+    // ---- Power on/off combo: hold original-Delete(_GO) key + Space >= 3s.
+    // Only active while on wireless (no USB cable session); USB mode lets the
+    // keys behave normally. Single presses keep their normal role. ----
     bool is_pw_del = (keycode == GO_HOLD); // original Delete position
     bool is_pw_spc = (keycode == KC_SPC);
+    bool pw_wireless = (wireless_get_current_devs() != PW_DEVS_USB);
     if (is_pw_del || is_pw_spc) {
-        if (pw_no_cable()) {
+        if (pw_wireless || pw_off) {
             if (record->event.pressed) {
                 if (is_pw_del) {
                     pw_del = true;
@@ -301,11 +303,11 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                 return true;
             }
         }
-        // USB cable present: leave pw_off and behave normally
-        if (pw_off) pw_off = false;
+        // wired (USB) session active: keys behave normally
+        pw_off = false;
         return true;
     }
-    if (pw_off && pw_no_cable()) {
+    if (pw_off) {
         // woke up with some other key while off -> not the combo, sleep again
         if (record->event.pressed) pw_enter_sleep();
         return false; // swallow everything until a valid power-on combo
@@ -382,8 +384,9 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 }
 
 void housekeeping_task_user(void) {
-    // USB plugged while powered off -> recover to normal (wired) operation
-    if (pw_off && !pw_no_cable()) {
+    // USB plugged (or devs switched to USB) while powered off -> recover to
+    // normal wired operation
+    if (pw_off && (wireless_get_current_devs() == PW_DEVS_USB || !pw_no_cable())) {
         pw_off = false;
         pw_combo = false;
         pw_del = pw_spc = false;
