@@ -13,6 +13,10 @@ extern void hs_housekeeping_task_user(void);
 // qmk-vim current keycode processor (can be swapped to drive a custom mode)
 extern process_func_t process_func;
 
+// wireless / low-power hooks used by the Delete+Space power combo
+extern void lpwr_set_timeout_manual(bool enable);
+extern void suspend_wakeup_init(void);
+
 #ifdef VIM_DOT_REPEAT
 extern void add_repeat_keycode(uint16_t keycode);
 #endif
@@ -140,6 +144,22 @@ static bool esc_visual_exit = false;
 /* ===== Replace mode (vim R: overwrite chars until Esc) ===== */
 static bool replace_active = false;
 
+/* ===== Power combo: Delete + Space held >= 3s (only with no USB cable) =====
+ * pw_off (deep sleep) is entered when the combo is held while running; while
+ * pw_off any key wakes the MCU, but only a fresh >=3s Delete+Space hold boots
+ * it back to wireless - any other key is swallowed and it sleeps again.
+ */
+#define PW_HOLD_MS 3000
+static bool     pw_off = false;
+static bool     pw_del = false;
+static bool     pw_spc = false;
+static bool     pw_combo = false;
+static uint32_t pw_combo_timer = 0;
+
+static bool pw_no_cable(void) {
+    return !readPin(HS_BAT_CABLE_PIN);
+}
+
 static bool process_replace_mode(uint16_t keycode, const keyrecord_t *record) {
     if (record->event.pressed) {
         uint16_t base = keycode;
@@ -219,6 +239,52 @@ bool process_normal_mode_user(uint16_t keycode, const keyrecord_t *record) {
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    // ---- Power on/off combo: hold Delete + Space >= 3s, only with no USB cable ----
+    if (keycode == KC_DEL || keycode == KC_SPC) {
+        if (pw_no_cable()) {
+            if (record->event.pressed) {
+                if (keycode == KC_DEL) {
+                    pw_del = true;
+                } else {
+                    pw_spc = true;
+                }
+                if (pw_del && pw_spc) {
+                    if (!pw_combo) {
+                        pw_combo       = true;
+                        pw_combo_timer = timer_read32();
+                        clear_keyboard(); // stop del/space output while holding
+                    }
+                    return false; // both held: awaiting the 3s power action
+                }
+                if (pw_off) return false; // off: only the combo is allowed
+                return true;              // single key behaves normally
+            } else {
+                if (keycode == KC_DEL) {
+                    pw_del = false;
+                } else {
+                    pw_spc = false;
+                }
+                if (pw_combo) {
+                    pw_combo = false;
+                    if (pw_off) lpwr_set_timeout_manual(true); // aborted boot -> sleep again
+                }
+                if (pw_off) return false;
+                return true;
+            }
+        }
+        // USB cable present: leave pw_off and behave normally
+        if (pw_off) pw_off = false;
+    } else if (pw_off && pw_no_cable()) {
+        // woke up with some other key while off -> not the combo, sleep again
+        if (record->event.pressed) {
+            pw_combo = false;
+            pw_del   = false;
+            pw_spc   = false;
+            lpwr_set_timeout_manual(true);
+        }
+        return false; // swallow everything until a valid power-on combo
+    }
+
     // GO_HOLD: hold the grave key to switch into the _GO layer (F-row + grave)
     if (keycode == GO_HOLD) {
         if (record->event.pressed) {
@@ -290,6 +356,29 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 }
 
 void housekeeping_task_user(void) {
+    // USB plugged while powered off -> recover to normal (wired) operation
+    if (pw_off && !pw_no_cable()) {
+        pw_off = false;
+        pw_combo = false;
+        pw_del = pw_spc = false;
+        suspend_wakeup_init();
+    }
+
+    // Delete+Space held for >= 3s (no cable) -> toggle power
+    if (pw_combo && timer_elapsed32(pw_combo_timer) >= PW_HOLD_MS) {
+        pw_combo       = false;
+        pw_del         = false;
+        pw_spc         = false;
+        clear_keyboard();
+        if (pw_off) {
+            pw_off = false; // boot back to wireless
+            suspend_wakeup_init();
+        } else {
+            pw_off = true; // power off: deep sleep, wake filtered by the combo
+            lpwr_set_timeout_manual(true);
+        }
+    }
+
     hs_housekeeping_task_user();
 }
 
