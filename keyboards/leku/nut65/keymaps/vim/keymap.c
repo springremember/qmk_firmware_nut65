@@ -324,7 +324,10 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     rgb_matrix_set_color(62, r, g, b); // 6
     rgb_matrix_set_color(63, r, g, b); // 7
     rgb_matrix_set_color(65, r, g, b); // 9
-    rgb_matrix_set_color(66, r, g, b); // 0
+
+    if (replace_active) {
+        rgb_matrix_set_color(1, 0x80, 0x00, 0x80); // R key purple while replacing
+    }
 
     uint8_t r2 = r * 7 / 100; // bottom strip at 7% brightness
     uint8_t g2 = g * 7 / 100;

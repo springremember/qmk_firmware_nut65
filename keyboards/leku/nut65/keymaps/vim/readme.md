@@ -1,115 +1,147 @@
 # NUT65 Vim 固件
 
-基于 qmk-vim 社区项目的 NUT65 键盘固件，在 QMK 固件层面模拟 Vim 绝大多数功能，纯固件实现、无需任何系统层软件。
+基于 qmk-vim 社区项目的 NUT65 键盘固件，在 QMK 固件层面模拟 Vim 绝大多数功能，纯固件实现、无需任何系统层软件。目标系统：Windows / Linux（Ctrl 方案，非 Mac）。
 
-## 一、使用说明
+## 一、模式与开关
 
 ### Vim 永久开启
 
-Vim 模式**永久开启**，开机即处于 Normal 模式，没有退出 Vim 的选项，只有模式切换。
-
-### Esc 行为
-
-| 当前模式 | 按 `Esc` 效果 |
-| :--- | :--- |
-| Insert | 先发送真实 Esc → 切 Normal |
-| Normal | 发送真实 Esc，保持 Normal |
-| Visual / Visual Line | 先发送真实 Esc → 切 Normal |
+Vim 模式**默认开启**，开机即处于 Normal 模式。可通过 `Fn` + `Caps` 关闭/开启 Vim（关闭后固件进入"透传"状态，指示灯变红，其余键位均按厂商行为使用）。
 
 ### 模式切换（遵循 vim 原则）
 
 | 命令 | 效果 |
 | :--- | :--- |
-| `i` / `a` / `I` / `A` / `o` / `O` | 进入插入模式（`a` 光标后移、`I` 行首、`A` 行尾、`o` 下一行、`O` 上一行） |
+| `i` / `a` / `A` / `I` / `o` / `O` | 进入插入模式（`i` 光标处、`a` 后移一格、`I` 行首、`A` 行尾、`o` 下一行新行、`O` 上一行新行） |
 | `v` / `V` | 进入可视模式 / 可视行模式 |
-| `Esc` | 插入/可视 → 回 Normal |
+| `Caps` | 按下回到 Normal（Insert / Visual → Normal；普通模式按 Caps 同样回到 Normal） |
+| `Fn` + `Caps` | 开关 Vim 模式 |
+| `Esc` | 见下方 Esc 行为表 |
+
+### Esc 行为
+
+| 当前模式 | 按 `Esc` 效果 |
+| :--- | :--- |
+| Normal | 向宿主发送真实 Esc（清高亮/取消），固件模式**不变** |
+| Insert | 向宿主发送真实 Esc（关闭输入法候选/取消等），固件**保持插入模式不变** |
+| Replace（`R`） | 退出替换模式回 Normal，不发送 Esc |
+| Visual / Visual Line | 交给 qmk-vim 原生处理：退出可视并回 Normal（含取消选区） |
+
+> 注意：Insert 模式下按 Esc 只发真实键，**不会**把固件切回 Normal（切 Normal 请用 `Caps`）。
 
 ## 二、功能清单
 
 ### 移动（motions）
-- `h` / `j` / `k` / `l` — 左 / 下 / 上 / 右
-- `w` / `b` / `e` — 跳词（Ctrl+方向键实现，`e` 与 `w` 行为近似）
-- `0` / `^` — 行首；`$` — 行尾
-- `gg` / `G` — 文件首 / 文件尾（部分程序生效）
 
-### 操作（actions，可与 motion 组合）
-- `d` + motion（`dw`/`db`/`d$`…）、`c` + motion（`cw`/`c$`…）、`y` + motion
-- `dd` / `cc` / `yy` — 删除 / 改写 / 复制整行
-- `D` / `C` — 删除 / 改写到行尾；`Y` — 复制到行尾
-- `x` / `X` — 删除光标处 / 前一个字符
+- `h` / `j` / `k` / `l` — 左 / 下 / 上 / 右（方向键）
+- `w` / `b` — 跳词首（系统 Ctrl+→ / Ctrl+←；`b` 回上一词首）
+- `e` — 与 `w` 近似（系统词跳只能到词首，无法精确到词尾）
+- `0` / `$` — 行首 / 行尾（Home / End）
+- `gg` / `G` — 文档首 / 文档末（Ctrl+Home / Ctrl+End）
+- `Ctrl+F` / `Ctrl+B` — 下翻页 / 上翻页（PageDown / PageUp）
+- `-` / `+` — 上一行行首 / 下一行行首
+- `Backspace` / `Space` — 左移 / 右移一格
+
+### 行首行尾细节
+
+- `^`、`W` / `B` / `E` 等需要读取文本内容的移动不精确，详见"已知局限"。
+
+### 编辑（actions）
+
+- `x` / `X` — 删除光标处字符 / 删除光标前字符（Del / Backspace）
+- `r` — 替换单个字符（Delete 后输入新字符）
+- `R` — **替换模式**：进入后持续逐个覆盖字符（每键 = Delete + 输入），光标前进；行尾自动变为插入；按 `Esc` 或 `Caps` 退出（进入替换模式时 R 键指示灯变紫）
+- `s` / `S` — 改写当前字符 / 改写整行（近似 vim 语义）
+- `c` / `d` / `y` + motion — 改写 / 删除 / 复制并移动（`cw`、`d$`、`yw`…）
+- `cc` / `dd` / `yy` — 改写 / 删除 / 复制整行
+- `C` / `D` / `Y` — 改写到行尾 / 删到行尾 / 复制到行尾
 - `p` / `P` — 粘贴到光标后 / 前
-- `u` / `Ctrl+r` — 撤销 / 重做
-- `r` — 替换单个字符
-- `.` — 重复上一次操作
+- `u` / `Ctrl+R` — 撤销 / 重做
+- `J`（Shift+J）— 合并下一行到当前行（End + Delete，不插空格）
+- `.` — 重复上一次操作（有限范围录制，见"已知局限"）
 
-### 文本对象
-- `iw` / `aw` — 单词内 / 含单词（如 `ciw`、`daw`）
-- `ig` / `ag` — 全文内 / 含全文（如 `cig`、`dig`）
+### 数字前缀（Normal 模式计数器）
 
-### 数字前缀
-- `3j`、`5w`、`d2w` 等 — 重复指定次数（Normal 模式数字键作计数器）
+- Normal 模式数字键作计数器（VIM_NUMBERED_JUMPS），可配合行操作使用（如 `3dd`）。
 
-### 定制绑定
-- `s` — 保存（Ctrl+S）
-- `/` / `?` — 查找（Ctrl+F）
-- `S` — 改写整行（vim 原生，等价 `cc`）
+### 查找与定制键
 
-### 数字键长按出 F 区（仅 Insert 模式、base 层）
+- `/` / `?` — 调用宿主搜索（Ctrl+F）
+- `Enter` — 透传（发送真实 Enter）
+
+## 三、数字键长按出 F 区（仅 Insert 模式、base 层）
+
 | 操作 | 效果 |
 | :--- | :--- |
 | 短按数字 `1`~`0` | 输入数字 |
 | 长按数字 `1`~`0`（200ms） | F1~F10 |
-| `Ctrl` + 数字 | Ctrl+F1~F10 |
+| `Ctrl` + 数字 | Ctrl+F1~Ctrl+F10 |
 
 > 说明：`Fn` + 数字（layer 1）仍是厂商原厂的 F1~F12，未做任何改动。
-> Normal 模式下数字键是计数器（`3j`），不做 F 区长按。
+> Normal 模式下数字键是计数器，不做 F 区长按。
 
-## 三、Vim 状态指示
+## 四、Vim 状态指示（RGB）
 
-### RGB 灯指示
-Esc 键位灯随 Vim 模式变色：
+模式指示每帧强制设置、覆盖厂商灯效，不受 RGB_MOD / RL_MOD 切换影响：
 
 | 模式 | 颜色 |
 | :--- | :--- |
 | Normal | 蓝 |
 | Insert | 绿 |
-| Visual | 品红 |
-| Visual Line | 青 |
+| Visual / Visual Line | 紫 |
+| Vim 关闭（透传） | 红 |
 
-### Insert 键光标指示
-非 Insert 模式（Normal/Visual/Visual Line）会向主机按住 `Insert` 键（KC_INS），使编辑器光标变为**方块**；Insert 模式释放，光标变为**竖线**。
+跟随模式色的键位灯（满亮）：`Caps`、`Esc`、`Delete`（原 Insert 位）、`1`、`3`、`6`、`7`、`9`。
+特殊：进入 `R`（替换模式）时 `R` 键位灯显示**紫色**；底部灯条及侧灯以 7% 亮度显示同一模式色。
 
-## 四、与厂商固件的差异
+## 五、与厂商固件的差异
 
-键盘层定义（keymap）与厂商默认**逐键一致**，其中 layer 1（`_FL`，Fn 功能层）**完全未改动**。所有 Vim 功能均为键码拦截实现。
+键盘层定义（keymap）中：
+- `_FL`（win FN 层）、`_MBL` / `_MFL`（mac 层）、`_DEFA`：与厂商默认**逐键一致，未改动**
+- `_BL`（win Base 层）仅按用户要求改动四处键位：`Insert→Delete`、`Delete→\`~\``（grave）、`PageUp→KC_WFWD`、`PageDown→KC_WBAK`，其余一致
+
+所有 Vim 功能均为键码拦截实现，不新增/改造任何层。
 
 仅对 `keyboards/leku/nut65/nut65.c` 做了 3 处最小改动（为让出 keymap 级钩子）：
 1. `process_record_user` 重命名为 `hs_process_record_user`（RGB 录制逻辑，原样保留）
 2. `housekeeping_task_user` 重命名为 `hs_housekeeping_task_user`（充电/矩阵循环逻辑，原样保留）
 3. `rgb_matrix_indicators_advanced_kb` 末尾补调用 `rgb_matrix_indicators_advanced_user`
 
-## 五、编译与刷写
+## 六、编译与刷写
 
 ```bash
+# 环境（首次）：
+export PATH=<nut65>/toolchain/usr/bin:$HOME/.local/bin:$PATH
+export QMK_HOME=<qmk_firmware 目录>
+
 # 编译
-make leku/nut65:vim
+make leku/nut65:vim ALLOW_WARNINGS=yes
 
 # 刷写（先进入 bootloader）
 make leku/nut65:vim:flash
 ```
+
+产物：`leku_nut65_vim.bin`（复制到项目 output/ 目录留档）。
 
 进入 bootloader 方式（任选其一）：
 - 按住 `Fn` + `Right Shift` + `Esc`
 - 按住 `Esc` 插入 USB 线（同时擦除持久化设置）
 - 按住底部 PCB 的 Reset 键插入 USB 线
 
-刷写工具使用 wb32-dfu（QMK Toolbox 或命令行 `wb32-dfu-updater` 均可，加载生成的 `leku_nut65_vim.bin`）。
+刷写工具使用 wb32-dfu（QMK Toolbox 或命令行 `wb32-dfu-updater` 均可）。
 
-## 六、已知局限
+> 刷入后如默认灯效/键位未生效，可在 `Fn` 层按左上 `EE_CLR` 恢复默认设置。
+> 子模块（lib/chibios 等）如拉取失败，可从仓库 `submodule-pack/` 目录解压对应版本到 `lib/` 下离线使用。
 
-固件无法实现的功能（与 qmk-vim 一致，需编辑器 Vim 插件）：
-- `f{char}` / `t{char}` 行内查找（需读取文本内容）
-- `/pattern` 正则搜索（固件用 Ctrl+F 系统查找替代）
-- `mark` 跳转、`%` 括号匹配（需解析代码结构）
-- `e` 跳词尾无法精确实现（系统级 Ctrl+→ 只能到词首，与 `w` 近似）
-- Insert 键方块光标依赖编辑器对 `KC_INS` 按住/释放的响应（多数编辑器为边沿触发，释放可能不自动变回竖线，需实测）
+## 七、已知局限
+
+固件无法精确实现的功能（需读取文本内容/编辑器内部状态）：
+- `e` 跳词尾：系统词跳只能到词首，与 `w` 近似
+- `^` 行首非空白、`W`/`B`/`E` 大写词、`f`/`t`/`;`/`,` 行内查找：无对应系统键
+- `%` 括号配对、`mark`/`` ` `` 跳转、`/pattern` 正则搜索（固件以宿主 Ctrl+F 替代）、`*`/`#` 词搜索
+- 文本对象（`iw`/`aw` 仅有限支持）、块选（Ctrl+V）、寄存器 `"a`、宏 `q@`、`gv`：无法通过键码实现
+- `~`、`gu`/`gU`、`<`/`>` 缩进、`zz`/`zt`/`zb`：无通用宿主命令
+- 数字前缀对纯移动的乘算精度取决于宿主（行操作 `dd` 等可乘算）
+- `R`/`r` 在中文输入法激活时，键入字母会进入输入法预编辑，需先切英文（与真实 vim 使用习惯一致）
+- `J` 合并不插空格、不去下一行缩进（固件无法感知行尾/行首空白）
+- `.` 重复仅覆盖经过 vim 引擎录制范围的按键序列，非完整操作记录
