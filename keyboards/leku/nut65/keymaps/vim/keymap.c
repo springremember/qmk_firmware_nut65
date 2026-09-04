@@ -426,7 +426,9 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         }
     }
 
-    // ---- Space: single press behaves normally; also arm the power combo. ----
+    // ---- Space: tracks the power combo (hold grave + Space); normal space
+    // falls through to the rest of the pipeline (mouse click in Normal mode,
+    // plain space otherwise). ----
     if (keycode == KC_SPC) {
         if (record->event.pressed) {
             if (pw_ok) {
@@ -439,14 +441,14 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                 }
             }
             if (pw_off) return false;
-            return true; // normal space behaviour
+            // fall through (Normal mode: mouse click, else plain space)
         } else {
             if (pw_ok) {
                 pw_spc = false;
                 if (pw_combo) pw_combo = false;
             }
             if (pw_off) pw_enter_sleep();
-            return true;
+            // fall through for the release as well
         }
     }
 
