@@ -164,6 +164,8 @@ static bool     pw_last_valid = false;       // whether a real wireless devs see
 static uint8_t  pw_frozen_wls = PW_DEVS_2G4; // device right before switching to USB
 static bool     pw_frozen_valid = false;
 static uint32_t pw_cable_timer = 0;
+static bool     pw_wired_prev = false;     // last cycle's wired state (edge detect)
+static bool     pw_recover_armed = false;  // force-back window after unplug
 
 // Fired by the wireless stack on every device switch - freeze the wireless
 // device in use right before we go to USB (that is what unplug must return
@@ -198,6 +200,10 @@ static void pw_boot_wireless(void) {
     pw_combo = false;
     pw_del   = false;
     pw_spc   = false;
+    // Stale frozen device from before the sleep must not force itself back
+    // after boot - manual BT/2.4G switching has to work again.
+    pw_frozen_valid  = false;
+    pw_recover_armed = false;
     // Restore LEDs/RGB explicitly (vendor wakeup_cb may skip RGB when its
     // rgb_enable_bak got cleared by the intermediate presleep), then drive
     // the vendor LPWR through WAKEUP to finish the normal wake path.
@@ -240,6 +246,13 @@ static void enter_replace_mode(void) {
 // make the linker pick either one).
 void normal_mode_user(void) {
     replace_active = false;
+#ifdef VIM_NUMBERED_JUMPS
+    { // consume any stale count so a leftover "3" cannot turn the next
+      // dd/cc/yy into a multi-line operation
+        extern int16_t motion_counter;
+        motion_counter = 0;
+    }
+#endif
 }
 
 // Normal mode bindings
@@ -375,6 +388,9 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         if (fn_active) {
             if (record->event.pressed) {
                 toggle_vim_mode();
+                normal_mode(); // reset the engine: process_func / replace state /
+                               // stale counters, even if vim was toggled off
+                               // while inside R replace mode
             }
             return false;
         }
@@ -407,25 +423,37 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 
 void housekeeping_task_user(void) {
     // USB plugged (or devs switched to USB) while powered off -> recover to
-    // normal wired operation
+    // normal wired operation (RGB was disabled by the vendor presleep, so
+    // force it back on here just like the combo boot does)
     if (pw_off && (wireless_get_current_devs() == PW_DEVS_USB || !pw_no_cable())) {
         pw_off = false;
         pw_combo = false;
         pw_del = pw_spc = false;
+        rgb_matrix_enable_noeeprom();
         suspend_wakeup_init();
     }
 
     // USB auto switch driven by the live USB host (plus cable pin fallback).
     // Plug  -> switch to wired USB.
-    // Unplug -> always return to the wireless device that was in use right
-    // before USB (frozen in wireless_devs_change_user), even if the vendor
-    // stack already hopped to another slot (e.g. default 2.4G).
+    // Unplug -> return to the wireless device that was in use right before
+    // USB (frozen in wireless_devs_change_user), even if the vendor stack
+    // already hopped to another slot (e.g. default 2.4G). The force-back only
+    // lives inside a short recovery window right after unplug - once the
+    // frozen device is reached (or the user picks a device manually) manual
+    // BT/2.4G switching is free again.
     if (!pw_off) {
         bool usb_host   = hs_usb_active();
         bool line_cable = !pw_no_cable(); // pin fall back
         bool wired      = usb_host || line_cable;
 
+        if (wired != pw_wired_prev) { // plug / unplug edge
+            pw_wired_prev    = wired;
+            pw_cable_timer   = timer_read32();
+            pw_recover_armed = !wired; // arm the force-back window on unplug
+        }
+
         if (wired) {
+            pw_recover_armed = false;
             uint8_t cur = wireless_get_current_devs();
             if (cur != PW_DEVS_USB) {
                 if (!pw_cable_timer) pw_cable_timer = timer_read32();
@@ -437,13 +465,18 @@ void housekeeping_task_user(void) {
                 pw_cable_timer = 0;
             }
         } else {
-            uint8_t target = pw_frozen_valid ? pw_frozen_wls : pw_last_wls;
-            uint8_t cur    = wireless_get_current_devs();
-            if (cur != target) {
-                // retry (throttled) until the frozen wireless device wins
-                if (!pw_cable_timer || timer_elapsed32(pw_cable_timer) >= 60) {
-                    pw_cable_timer = timer_read32();
-                    wireless_devs_change(cur, target, false);
+            uint8_t cur = wireless_get_current_devs();
+            if (pw_recover_armed) {
+                uint8_t target = pw_frozen_valid ? pw_frozen_wls : pw_last_wls;
+                if (cur != target) {
+                    // retry (throttled) until the frozen wireless device wins
+                    if (!pw_cable_timer || timer_elapsed32(pw_cable_timer) >= 60) {
+                        pw_cable_timer = timer_read32();
+                        wireless_devs_change(cur, target, false);
+                    }
+                } else {
+                    pw_cable_timer   = 0;
+                    pw_recover_armed = false; // recovered; manual switching free
                 }
             } else {
                 pw_cable_timer = 0;

@@ -19,8 +19,10 @@ void register_motion(uint16_t keycode, const keyrecord_t *record) {
         extern int16_t motion_counter;
         if (motion_counter > 1) {
             tap_code16(keycode);
+            motion_counter = 0; // consume the count, it belongs to this motion
             return;
         }
+        motion_counter = 0; // plain motion also consumes any pending count
 #endif
         register_code16(keycode);
     } else {
