@@ -112,16 +112,16 @@ limit 20
 
 > 规则：仅小写字母被跟踪（`sel`/`SELECT` 不触发）；输入空格/数字/符号等会清除跟踪；触发后跟踪自动清空。后续可在 keymap.c 的 `sql_dict[]` 里按 `{"关键字", "片段"}` 扩展词条。
 
-## 三、F 区：_GO 层（按住右 Shift 切换）
+## 三、F 区与 grave：右 Shift 组合键
 
-**按住右 `Shift`** 切换到 _GO 层，松开回归原层（该键不再作 Shift 用，Shift 组合请用左 `Shift`）：
+按住**右 `Shift`** 再按以下键（替代已删除的 _GO 层；其它任何按键组合下右 `Shift` 仍是普通 Shift）：
 
-| _GO 层键位 | 输出 |
+| 组合 | 输出 |
 | :--- | :--- |
-| `Esc` 位置 | `` ` ``（Shift= `~`） |
-| `1` `2` `…` `0` `-` `=` | F1 F2 … F10 F11 F12 |
+| 右 `Shift` + `Esc` | `` ` ``（再加左 `Shift` = `~`） |
+| 右 `Shift` + `1` `2` `…` `0` `-` `=` | F1 F2 … F10 F11 F12 |
 
-> 其余 _GO 层键位继承 base 层。Insert 模式下数字键不再长按出 F 区（已取消），普通数字输入即可；`Ctrl` + 数字在 Insert 模式仍映射为 Ctrl+F1~F10。
+> Insert 模式下数字键不再长按出 F 区（已取消），普通数字输入即可；`Ctrl` + 数字在 Insert 模式仍映射为 Ctrl+F1~F10。
 > 说明：`Fn` + 数字（layer 1）仍是厂商原厂的 F1~F12，未做任何改动。
 
 ## 四、Vim 状态指示（RGB）
@@ -144,8 +144,7 @@ limit 20
 
 键盘层定义（keymap）中：
 - `_FL`（win FN 层）、`_MBL` / `_MFL`（mac 层）、`_DEFA`：与厂商默认**逐键一致，未改动**
-- `_BL`（win Base 层）按用户要求改动键位：`Insert→Delete`、原 `Delete`（grave 位）→ `` ` ``/`~` 键、右 `Shift`→**按住切 _GO 层**、`PageUp→KC_WFWD`、`PageDown→KC_WBAK`，其余一致
-- 新增 `_GO` 层（F 区 + `` ` ``，见上文；keyboard.json 动态层数相应为 6）
+- `_BL`（win Base 层）按用户要求改动键位：`Insert→Delete`、原 `Delete`（grave 位）→ `` ` ``/`~` 键、`PageUp→KC_WFWD`、`PageDown→KC_WBAK`，其余一致；右 `Shift` 组合键（grave/F 区）见上文
 
 所有 Vim 功能均为键码拦截实现，不新增/改造任何层。
 
