@@ -488,7 +488,12 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     c_g /= 2;
     c_b /= 2;
 
-    uint8_t bat = *md_getp_bat();
+    uint8_t bat;
+    if (wireless_get_current_devs() == PW_DEVS_USB) {
+        bat = 100; // wired: bottom strip stays fully lit
+    } else {
+        bat = *md_getp_bat(); // wireless: real battery level
+    }
     if (bat > 100) bat = 100;
     uint8_t lit = (uint8_t)(((uint16_t)bat * 80) / 100); // 80 strip LEDs
     uint8_t lo  = (80 - lit) / 2;                        // lit band centred
