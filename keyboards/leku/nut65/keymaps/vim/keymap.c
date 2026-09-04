@@ -17,6 +17,7 @@ extern process_func_t process_func;
 extern void suspend_wakeup_init(void);
 extern void wireless_devs_change(uint8_t old_devs, uint8_t new_devs, bool reset);
 extern uint8_t wireless_get_current_devs(void);
+extern bool hs_usb_active(void);
 #define PW_DEVS_USB  0
 #define PW_DEVS_2G4  6
 
@@ -399,37 +400,32 @@ void housekeeping_task_user(void) {
         if (cur != PW_DEVS_USB) pw_last_wls = cur;
     }
 
-    // USB cable auto switch with sleep suppression.
-    // The vendor stack puts the board straight to sleep the moment the USB
-    // cable is removed; while the device is still on DEVS_USB but the cable is
-    // gone we actively cancel that sleep and hop back to wireless shortly.
-    bool cable = !pw_no_cable();
+    // Remember the last non-USB device so unplugging can return to wireless,
+    // then USB auto switch driven by the live USB host (plus cable pin as a
+    // fall back). Unplug -> hop back to wireless; plug -> wired.
     if (!pw_off) {
         uint8_t cur = wireless_get_current_devs();
-        if (cur == PW_DEVS_USB && !cable) {
-            // unplugged but still in USB device: block pending sleep now
+        if (cur != PW_DEVS_USB) pw_last_wls = cur;
+
+        bool usb_host   = hs_usb_active();
+        bool line_cable = !pw_no_cable(); // pin fall back
+        bool wired      = usb_host || line_cable;
+        if (wired != pw_cable_last) {
+            pw_cable_last  = wired;
+            pw_cable_timer = timer_read32();
+        } else if (pw_cable_timer && timer_elapsed32(pw_cable_timer) >= 80) {
+            pw_cable_timer = 0;
+            cur            = wireless_get_current_devs();
+            if (wired && cur != PW_DEVS_USB) {
+                wireless_devs_change(cur, PW_DEVS_USB, false); // plug -> wired
+            } else if (!wired && cur == PW_DEVS_USB) {
+                wireless_devs_change(PW_DEVS_USB, pw_last_wls, false); // unplug -> wireless
+            }
+        }
+        // extra safety: never sleep while stuck on USB with no host
+        if (cur == PW_DEVS_USB && !usb_host) {
             lpwr_set_timeout_manual(false);
-            lpwr_set_state(0); // LPWR_NORMAL, cancel any presleep/stop
-            if (pw_cable_last) { // newly unplugged edge
-                pw_cable_last  = false;
-                pw_cable_timer = timer_read32();
-            }
-            if (pw_cable_timer && timer_elapsed32(pw_cable_timer) >= 80) {
-                pw_cable_timer = 0;
-                wireless_devs_change(PW_DEVS_USB, pw_last_wls, false); // back to wireless
-            }
-        } else {
-            pw_cable_last = cable;
-            if (cable && cur != PW_DEVS_USB) {
-                // plugged in while on wireless -> switch to wired
-                if (pw_cable_timer == 0) pw_cable_timer = timer_read32();
-                if (timer_elapsed32(pw_cable_timer) >= 80) {
-                    pw_cable_timer = 0;
-                    wireless_devs_change(cur, PW_DEVS_USB, false);
-                }
-            } else {
-                pw_cable_timer = 0;
-            }
+            lpwr_set_state(0);
         }
     }
 

@@ -534,8 +534,30 @@ void suspend_wakeup_init_kb(void) {
     hs_rgb_blink_set_timer(timer_read32());
 }
 
+bool hs_usb_active(void) {
+    return (USB_DRIVER.state == USB_ACTIVE);
+}
+
 bool lpwr_is_allow_timeout_hook(void) {
 
+    // While the device is still switched to USB but there is no live USB host
+    // (cable pulled), never allow low power sleep - the keymap layer moves us
+    // back to wireless instead.
+    if (wireless_get_current_devs() == DEVS_USB && USB_DRIVER.state != USB_ACTIVE) {
+        lpwr_set_timeout_manual(false);
+        return false;
+    }
+    return true;
+}
+
+bool lpwr_is_allow_presleep_hook(void) {
+
+    // Same veto one step earlier so a pending sleep is aborted back to NORMAL
+    if (wireless_get_current_devs() == DEVS_USB && USB_DRIVER.state != USB_ACTIVE) {
+        lpwr_set_timeout_manual(false);
+        lpwr_set_state(LPWR_NORMAL);
+        return false;
+    }
     return true;
 }
 
