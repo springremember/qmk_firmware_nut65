@@ -281,61 +281,60 @@ bool process_normal_mode_user(uint16_t keycode, const keyrecord_t *record) {
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
-    // ---- Power on/off combo: hold original-Delete(_GO) key + Space >= 3s.
-    // Only active while on wireless (no USB cable session); USB mode lets the
-    // keys behave normally. Single presses keep their normal role. ----
-    bool is_pw_del = (keycode == GO_HOLD); // original Delete position
-    bool is_pw_spc = (keycode == KC_SPC);
-    bool pw_wireless = (wireless_get_current_devs() != PW_DEVS_USB);
-    if (is_pw_del || is_pw_spc) {
-        if (pw_wireless || pw_off) {
-            if (record->event.pressed) {
-                if (is_pw_del) {
-                    pw_del = true;
-                } else {
-                    pw_spc = true;
-                }
-                if (pw_del && pw_spc) {
-                    if (!pw_combo) {
-                        pw_combo       = true;
-                        pw_combo_timer = timer_read32();
-                        clear_keyboard(); // stop output while holding the combo
-                    }
-                    return false; // both held: awaiting the 3s power action
-                }
-                if (pw_off) return false; // off: only the combo may run
-                return true;              // single key: normal (layer / space)
-            } else {
-                if (is_pw_del) {
-                    pw_del = false;
-                } else {
-                    pw_spc = false;
-                }
-                if (pw_combo) {
-                    pw_combo = false;
-                    if (pw_off) pw_enter_sleep(); // aborted boot -> sleep again
-                }
-                if (pw_off) return false;
-                return true;
-            }
-        }
-        // wired (USB) session active: keys behave normally
-        pw_off = false;
-        return true;
-    }
-    if (pw_off) {
-        // woke up with some other key while off -> not the combo, sleep again
-        if (record->event.pressed) pw_enter_sleep();
-        return false; // swallow everything until a valid power-on combo
-    }
-
-    // GO_HOLD: hold the grave key to switch into the _GO layer (F-row + grave)
+    bool pw_ok = (wireless_get_current_devs() != PW_DEVS_USB); // combo only off-wire
+    // ---- _GO layer key (original Delete, row1 col14). Always switches the
+    // _GO layer, independent of the power combo. ----
     if (keycode == GO_HOLD) {
         if (record->event.pressed) {
+            if (pw_ok) {
+                pw_del = true;
+                if (pw_del && pw_spc && !pw_combo) { // power combo engaged
+                    pw_combo       = true;
+                    pw_combo_timer = timer_read32();
+                    clear_keyboard();
+                }
+            }
+            if (pw_off) return false; // off: only the combo may run
             layer_on(_GO);
         } else {
+            if (pw_ok) {
+                pw_del = false;
+                if (pw_combo) pw_combo = false;
+            }
             layer_off(_GO);
+            if (pw_off) pw_enter_sleep(); // released without a full combo
         }
+        return false;
+    }
+
+    // ---- Space: single press behaves normally; also arm the power combo. ----
+    if (keycode == KC_SPC) {
+        if (record->event.pressed) {
+            if (pw_ok) {
+                pw_spc = true;
+                if (pw_del && pw_spc && !pw_combo) { // power combo engaged
+                    pw_combo       = true;
+                    pw_combo_timer = timer_read32();
+                    clear_keyboard();
+                    return false;
+                }
+            }
+            if (pw_off) return false;
+            return true; // normal space behaviour
+        } else {
+            if (pw_ok) {
+                pw_spc = false;
+                if (pw_combo) pw_combo = false;
+            }
+            if (pw_off) pw_enter_sleep();
+            return true;
+        }
+    }
+
+    // ---- Powered off (deep sleep): only the combo wakes, everything else is
+    // swallowed and the board goes straight back to sleep. ----
+    if (pw_off) {
+        if (record->event.pressed) pw_enter_sleep();
         return false;
     }
 
