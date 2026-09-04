@@ -318,8 +318,12 @@ bool process_visual_line_mode(uint16_t keycode, const keyrecord_t *record) {
         case VIM_J:
 #ifdef BETTER_VISUAL_MODE
             if (visual_direction == V_NONE) {
-                tap_code(KC_LEFT);
-                tap_code16(LSFT(VIM_J));
+                // Collapse back onto the anchor line before extending. The
+                // stock LEFT tap wraps to the previous line's end in editors
+                // like VSCode, which dropped the cursor's own line from the
+                // selection. HOME never crosses a line. The held
+                // Shift+Down below provides the first extension itself.
+                VIM_HOME();
             }
 #endif
             set_visual_direction(V_FORWARD);
