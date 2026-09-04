@@ -138,13 +138,19 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
 
 // clang-format on
 
-/* ===== Vim is always on: enter Normal mode at boot ===== */
+/* ===== Vim is always on: start in typing (Insert) mode - hold Caps for
+ * Normal, long-press Esc for Normal ===== */
 void keyboard_post_init_user(void) {
     enable_vim_mode();
+    insert_mode();
 }
 
 /* ===== Esc visual exit tracking ===== */
 static bool esc_visual_exit = false;
+
+/* ===== Esc tap/hold: short tap = real Esc, long press = Normal mode ===== */
+#define ESC_HOLD_TIME 200
+static uint16_t esc_press_timer = 0;
 
 /* ===== Replace mode (vim R: overwrite chars until Esc) ===== */
 static bool replace_active = false;
@@ -448,9 +454,10 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         return false;
     }
 
-    // Esc first, before anything else can consume it. Normal & Insert mode:
-    // send a real Esc to the host and DO NOT switch modes. Only Visual modes
-    // (qmk-vim native exit) and Replace mode are special.
+    // Esc: short tap sends a real Esc to the host (firmware mode unchanged);
+    // long press (>=200ms, decided on release) switches the firmware to
+    // Normal mode without sending a key. Visual modes hand the tap to
+    // qmk-vim (native exit); replace mode exits on the press.
     if (keycode == KC_ESC && vim_mode_enabled()) {
         if (record->event.pressed) {
             if (get_vim_mode() == VISUAL_MODE || get_vim_mode() == VISUAL_LINE_MODE) {
@@ -461,26 +468,34 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                 return false;
             } else {
                 esc_visual_exit = false;
-                tap_code(KC_ESC); // plain Esc: host acts, vim mode unchanged
+                esc_press_timer = timer_read(); // decide tap vs hold on release
                 return false;
             }
         } else {
             if (esc_visual_exit) {
                 esc_visual_exit = false;
+                return false;
             }
+            if (esc_press_timer && timer_elapsed(esc_press_timer) >= ESC_HOLD_TIME) {
+                esc_press_timer = 0;
+                normal_mode(); // long press -> Normal mode
+                return false;
+            }
+            esc_press_timer = 0;
+            tap_code(KC_ESC); // short tap -> real Esc
             return false;
         }
     }
 
-    // Caps: press = switch to Normal; Fn+Caps = toggle vim
+    // Caps: hold = momentary Normal mode, release = back to typing (Insert).
+    // Fn+Caps still toggles vim; vim off lets Caps act as normal Caps Lock.
     if (keycode == KC_CAPS) {
         bool fn_active = IS_LAYER_ON(_FL) || IS_LAYER_ON(_MFL);
         if (fn_active) {
             if (record->event.pressed) {
                 toggle_vim_mode();
-                normal_mode(); // reset the engine: process_func / replace state /
-                               // stale counters, even if vim was toggled off
-                               // while inside R replace mode
+                insert_mode(); // vim on -> resting typing mode; off -> harmless
+                               // engine reset (process_func / replace state)
             }
             return false;
         }
@@ -492,6 +507,8 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 #ifdef VIM_DOT_REPEAT
             add_repeat_keycode(KC_NO); // stop repeat recording on Caps->Normal
 #endif
+        } else {
+            insert_mode(); // released -> back to typing mode
         }
         return false;
     }

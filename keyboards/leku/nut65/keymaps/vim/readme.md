@@ -6,28 +6,27 @@
 
 ### Vim 永久开启
 
-Vim 模式**默认开启**，开机即处于 Normal 模式。可通过 `Fn` + `Caps` 关闭/开启 Vim（关闭后固件进入"透传"状态，指示灯变红，其余键位均按厂商行为使用）。
+Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可通过 `Fn` + `Caps` 关闭/开启 Vim（关闭后固件进入"透传"状态，指示灯变红，其余键位均按厂商行为使用）。
 
-### 模式切换（遵循 vim 原则）
+### 模式切换
 
 | 命令 | 效果 |
 | :--- | :--- |
 | `i` / `a` / `A` / `I` / `o` / `O` | 进入插入模式（`i` 光标处、`a` 后移一格、`I` 行首、`A` 行尾、`o` 下一行新行、`O` 上一行新行） |
 | `v` / `V` | 进入可视模式 / 可视行模式 |
-| `Caps` | 按下回到 Normal（Insert / Visual → Normal；普通模式按 Caps 同样回到 Normal） |
+| `Caps` **按住** | 临时 Normal 模式（momentary），松开回到打字模式 |
+| `Esc` **长按**（≥200ms） | 切到 Normal 模式（不发送键码） |
 | `Fn` + `Caps` | 开关 Vim 模式 |
-| `Esc` | 见下方 Esc 行为表 |
+| `Esc` 短按 | 见下方 Esc 行为表 |
 
 ### Esc 行为
 
-| 当前模式 | 按 `Esc` 效果 |
+| 操作 | 效果 |
 | :--- | :--- |
-| Normal | 向宿主发送真实 Esc（清高亮/取消），固件模式**不变** |
-| Insert | 向宿主发送真实 Esc（关闭输入法候选/取消等），固件**保持插入模式不变** |
-| Replace（`R`） | 退出替换模式回 Normal，不发送 Esc |
-| Visual / Visual Line | 交给 qmk-vim 原生处理：退出可视并回 Normal（含取消选区） |
-
-> 注意：Insert 模式下按 Esc 只发真实键，**不会**把固件切回 Normal（切 Normal 请用 `Caps`）。
+| 短按 `Esc` | 向宿主发送真实 Esc（清高亮/取消/退出输入法候选），固件模式**不变** |
+| 长按 `Esc`（≥200ms） | 固件切到 Normal 模式，不发送任何键码 |
+| Replace（`R`）中按 `Esc` | 退出替换模式回 Normal，不发送 Esc |
+| Visual / Visual Line 中按 `Esc` | 交给 qmk-vim 原生处理：退出可视并回 Normal（含取消选区） |
 
 ### 电源开关（仅无 USB 线时生效：`` ` ``原 Delete 位 + `Space`）
 
