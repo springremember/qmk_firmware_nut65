@@ -29,9 +29,9 @@ Vim 模式**默认开启**，开机即处于 Normal 模式。可通过 `Fn` + `C
 
 > 注意：Insert 模式下按 Esc 只发真实键，**不会**把固件切回 Normal（切 Normal 请用 `Caps`）。
 
-### 电源开关（仅无 USB 线时生效：`Delete`原键位 + `Space`）
+### 电源开关（仅无 USB 线时生效：`` ` ``原 Delete 位 + `Space`）
 
-`Delete` 原键位（第 2 行最右，本固件为 `_GO` 层切换键）与 `Space` 组合：
+`` ` ``/`~` 键（第 2 行最右，即原 `Delete` 键位）与 `Space` 组合：
 
 | 操作 | 效果 |
 | :--- | :--- |
@@ -83,13 +83,13 @@ Vim 模式**默认开启**，开机即处于 Normal 模式。可通过 `Fn` + `C
 - `/` / `?` — 调用宿主搜索（Ctrl+F）
 - `Enter` — 透传（发送真实 Enter）
 
-## 三、F 区：_GO 层（按住 grave 键切换）
+## 三、F 区：_GO 层（按住右 Shift 切换）
 
-键盘 `\` 位置右侧的 `grave` 键（`~`/`` ` `` 原位置，`_BL` 第 2 行最右）改为 **按住时切换到 _GO 层**，松开回归原层：
+**按住右 `Shift`** 切换到 _GO 层，松开回归原层（该键不再作 Shift 用，Shift 组合请用左 `Shift`）：
 
 | _GO 层键位 | 输出 |
 | :--- | :--- |
-| `Esc` 位置（原 grave 键位） | `` ` ``（Shift= `~`） |
+| `Esc` 位置 | `` ` ``（Shift= `~`） |
 | `1` `2` `…` `0` `-` `=` | F1 F2 … F10 F11 F12 |
 
 > 其余 _GO 层键位继承 base 层。Insert 模式下数字键不再长按出 F 区（已取消），普通数字输入即可；`Ctrl` + 数字在 Insert 模式仍映射为 Ctrl+F1~F10。
@@ -115,7 +115,7 @@ Vim 模式**默认开启**，开机即处于 Normal 模式。可通过 `Fn` + `C
 
 键盘层定义（keymap）中：
 - `_FL`（win FN 层）、`_MBL` / `_MFL`（mac 层）、`_DEFA`：与厂商默认**逐键一致，未改动**
-- `_BL`（win Base 层）按用户要求改动键位：`Insert→Delete`、原 `Delete`（grave 位）改为**按住切 _GO 层**、`PageUp→KC_WFWD`、`PageDown→KC_WBAK`，其余一致
+- `_BL`（win Base 层）按用户要求改动键位：`Insert→Delete`、原 `Delete`（grave 位）→ `` ` ``/`~` 键（兼电源组合键）、右 `Shift`→**按住切 _GO 层**、`PageUp→KC_WFWD`、`PageDown→KC_WBAK`，其余一致
 - 新增 `_GO` 层（F 区 + `` ` ``，见上文；keyboard.json 动态层数相应为 6）
 
 所有 Vim 功能均为键码拦截实现，不新增/改造任何层。

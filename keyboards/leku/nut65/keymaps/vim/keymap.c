@@ -35,16 +35,16 @@ enum layers {
 };
 
 enum custom_keycodes {
-    GO_HOLD = SAFE_RANGE, // hold to switch into the _GO layer
+    GO_RSFT = SAFE_RANGE, // hold the right Shift key to switch into the _GO layer
 };
 
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [_BL] = LAYOUT( /* win Base */
         KC_ESC,   KC_1,       KC_2,       KC_3,     KC_4,     KC_5,     KC_6,     KC_7,     KC_8,     KC_9,     KC_0,       KC_MINS,  KC_EQL,   KC_BSPC,   KC_DEL,
-        KC_TAB,   KC_Q,       KC_W,       KC_E,     KC_R,     KC_T,     KC_Y,     KC_U,     KC_I,     KC_O,     KC_P,       KC_LBRC,  KC_RBRC,  KC_BSLS,   GO_HOLD,
+        KC_TAB,   KC_Q,       KC_W,       KC_E,     KC_R,     KC_T,     KC_Y,     KC_U,     KC_I,     KC_O,     KC_P,       KC_LBRC,  KC_RBRC,  KC_BSLS,   KC_GRV,
         KC_CAPS,  KC_A,       KC_S,       KC_D,     KC_F,     KC_G,     KC_H,     KC_J,     KC_K,     KC_L,     KC_SCLN,    KC_QUOT,            KC_ENT,    KC_WFWD,
-        KC_LSFT,              KC_Z,       KC_X,     KC_C,     KC_V,     KC_B,     KC_N,     KC_M,     KC_COMM,  KC_DOT,     KC_SLSH,  KC_RSFT,  KC_UP,     KC_WBAK,
+        KC_LSFT,              KC_Z,       KC_X,     KC_C,     KC_V,     KC_B,     KC_N,     KC_M,     KC_COMM,  KC_DOT,     KC_SLSH,  GO_RSFT,  KC_UP,     KC_WBAK,
         KC_LCTL,  KC_LCMD,    KC_LALT,                        KC_SPC,                                           KC_RALT,    MO(_FL),  KC_LEFT,  KC_DOWN,   KC_RGHT,
         KC_NO,    KC_NO,      KC_NO,      KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,    KC_NO,      KC_NO,    KC_NO,    KC_NO,     KC_NO
         ),
@@ -148,14 +148,14 @@ static bool esc_visual_exit = false;
 /* ===== Replace mode (vim R: overwrite chars until Esc) ===== */
 static bool replace_active = false;
 
-/* ===== Power combo: original Delete key (row1 col14, now GO_HOLD) + Space
- * held >= 3s with no USB cable = deep-sleep power toggle.
+/* ===== Power combo: the original Delete key (row1 col14, now grave `) +
+ * Space held >= 3s with no USB cable = deep-sleep power toggle.
  * pw_off: any key wakes the MCU, but only a fresh >=3s combo boots wireless
  * again; every other key is swallowed and it goes straight back to sleep.
  */
 #define PW_HOLD_MS 3000
 static bool     pw_off = false;
-static bool     pw_del = false; // the original-Delete/_GO key
+static bool     pw_del = false; // the original-Delete (grave) combo key
 static bool     pw_spc = false;
 static bool     pw_combo = false;
 static uint32_t pw_combo_timer = 0;
@@ -302,29 +302,49 @@ bool process_normal_mode_user(uint16_t keycode, const keyrecord_t *record) {
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     bool pw_ok = (wireless_get_current_devs() != PW_DEVS_USB); // combo only off-wire
-    // ---- _GO layer key (original Delete, row1 col14). Always switches the
-    // _GO layer, independent of the power combo. ----
-    if (keycode == GO_HOLD) {
+    // ---- Right Shift (_BL): hold to switch into the _GO layer (F-row +
+    // grave). No shift function on this key - use the left Shift for that. ----
+    if (keycode == GO_RSFT) {
         if (record->event.pressed) {
-            if (pw_ok) {
+            if (pw_off) {
+                pw_enter_sleep(); // off: not the combo, straight back to sleep
+                return false;
+            }
+            layer_on(_GO);
+        } else {
+            layer_off(_GO);
+        }
+        return false;
+    }
+
+    // ---- Grave key (row1 col14, the original Delete position): normal `~
+    // typing, and the power-combo key (identified by matrix position so the
+    // _GO layer's own grave never arms it). ----
+    if (keycode == KC_GRV) {
+        bool is_pw_key = (record->event.key.row == 1 && record->event.key.col == 14);
+        if (record->event.pressed) {
+            if (is_pw_key && pw_ok) {
                 pw_del = true;
                 if (pw_del && pw_spc && !pw_combo) { // power combo engaged
                     pw_combo       = true;
                     pw_combo_timer = timer_read32();
                     clear_keyboard();
+                    return false;
                 }
             }
-            if (pw_off) return false; // off: only the combo may run
-            layer_on(_GO);
+            if (pw_off) {
+                pw_enter_sleep();
+                return false;
+            }
+            return true; // normal `~ behaviour
         } else {
-            if (pw_ok) {
+            if (is_pw_key && pw_ok) {
                 pw_del = false;
                 if (pw_combo) pw_combo = false;
             }
-            layer_off(_GO);
             if (pw_off) pw_enter_sleep(); // released without a full combo
+            return true;
         }
-        return false;
     }
 
     // ---- Space: single press behaves normally; also arm the power combo. ----
