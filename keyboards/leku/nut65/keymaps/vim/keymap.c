@@ -446,6 +446,8 @@ void housekeeping_task_user(void) {
     hs_housekeeping_task_user();
 }
 
+extern uint8_t *md_getp_bat(void);
+
 bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     uint8_t r, g, b;
     if (!vim_mode_enabled()) {
@@ -471,25 +473,38 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     rgb_matrix_set_color(56, r, g, b); // Esc single LED
     rgb_matrix_set_color(70, r, g, b); // Delete (was Insert) single LED
 
-    uint8_t r2, g2, b2;
-    if (replace_active) {
-        // strip turns orange while in replace (R) mode
-        r2 = 0xFF * 7 / 100;
-        g2 = 0x80 * 7 / 100;
-        b2 = 0;
-    } else {
-        r2 = r * 7 / 100; // bottom strip at 7% brightness
-        g2 = g * 7 / 100;
-        b2 = b * 7 / 100;
+    // Bottom strip = battery level (highest priority). Number of lit LEDs is
+    // fixed by the charge level (both ends turned off toward the middle), the
+    // mode only chooses the colour.
+    uint8_t c_r = r;
+    uint8_t c_g = g;
+    uint8_t c_b = b;
+    if (replace_active) { // replace (R) mode is shown orange
+        c_r = 0xFF;
+        c_g = 0x80;
+        c_b = 0x00;
     }
+    c_r /= 2; // keep the strip readable but not dazzling
+    c_g /= 2;
+    c_b /= 2;
 
-    for (uint8_t i = 71; i <= 150; i++) { // bottom strip
-        rgb_matrix_set_color(i, r2, g2, b2);
+    uint8_t bat = *md_getp_bat();
+    if (bat > 100) bat = 100;
+    uint8_t lit = (uint8_t)(((uint16_t)bat * 80) / 100); // 80 strip LEDs
+    uint8_t lo  = (80 - lit) / 2;                        // lit band centred
+
+    for (uint8_t i = 71; i <= 150; i++) {
+        uint8_t pos = i - 71;
+        if (pos >= lo && pos < lo + lit) {
+            rgb_matrix_set_color(i, c_r, c_g, c_b);
+        } else {
+            rgb_matrix_set_color(i, 0, 0, 0); // turned off from both ends
+        }
     }
-    rgb_matrix_set_color(10, r2, g2, b2);
-    rgb_matrix_set_color(11, r2, g2, b2);
-    rgb_matrix_set_color(13, r2, g2, b2);
-    rgb_matrix_set_color(14, r2, g2, b2);
+    rgb_matrix_set_color(10, 0, 0, 0);
+    rgb_matrix_set_color(11, 0, 0, 0);
+    rgb_matrix_set_color(13, 0, 0, 0);
+    rgb_matrix_set_color(14, 0, 0, 0);
 
     return true;
 }
