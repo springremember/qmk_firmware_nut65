@@ -159,15 +159,22 @@ static bool     pw_del = false; // the original-Delete/_GO key
 static bool     pw_spc = false;
 static bool     pw_combo = false;
 static uint32_t pw_combo_timer = 0;
-static uint8_t  pw_last_wls = PW_DEVS_2G4; // remembered non-USB device
-static bool     pw_last_valid = false;     // whether a real wireless devs seen
-static bool     pw_cable_last = false;
+static uint8_t  pw_last_wls = PW_DEVS_2G4;   // remembered non-USB device
+static bool     pw_last_valid = false;       // whether a real wireless devs seen
+static uint8_t  pw_frozen_wls = PW_DEVS_2G4; // device right before switching to USB
+static bool     pw_frozen_valid = false;
 static uint32_t pw_cable_timer = 0;
 
-// Fired by the wireless stack on every device switch - capture the last
-// genuinely used wireless device (BT1/2G4), not a default.
+// Fired by the wireless stack on every device switch - freeze the wireless
+// device in use right before we go to USB (that is what unplug must return
+// to), and keep the last wireless slot for boot.
 void wireless_devs_change_user(uint8_t old_devs, uint8_t new_devs, bool reset) {
-    if (new_devs != PW_DEVS_USB) {
+    if (new_devs == PW_DEVS_USB) {
+        if (old_devs != PW_DEVS_USB) { // leaving wireless for wired: freeze it
+            pw_frozen_wls   = old_devs;
+            pw_frozen_valid = true;
+        }
+    } else {
         pw_last_wls   = new_devs;
         pw_last_valid = true;
     }
@@ -408,38 +415,44 @@ void housekeeping_task_user(void) {
         suspend_wakeup_init();
     }
 
-    // Remember the last non-USB device so unplugging can return to wireless,
-    // then USB auto switch driven by the live USB host (plus cable pin as a
-    // fall back). Unplug -> hop back to the last wireless device; plug ->
-    // wired.
+    // USB auto switch driven by the live USB host (plus cable pin fallback).
+    // Plug  -> switch to wired USB.
+    // Unplug -> always return to the wireless device that was in use right
+    // before USB (frozen in wireless_devs_change_user), even if the vendor
+    // stack already hopped to another slot (e.g. default 2.4G).
     if (!pw_off) {
-        uint8_t cur = wireless_get_current_devs();
-        if (cur != PW_DEVS_USB) {
-            pw_last_wls   = cur;
-            pw_last_valid = true;
-        }
-
         bool usb_host   = hs_usb_active();
         bool line_cable = !pw_no_cable(); // pin fall back
         bool wired      = usb_host || line_cable;
-        if (wired != pw_cable_last) {
-            pw_cable_last  = wired;
-            pw_cable_timer = timer_read32();
-        } else if (pw_cable_timer && timer_elapsed32(pw_cable_timer) >= 80) {
-            pw_cable_timer = 0;
-            cur            = wireless_get_current_devs();
-            if (wired && cur != PW_DEVS_USB) {
-                wireless_devs_change(cur, PW_DEVS_USB, false); // plug -> wired
-            } else if (!wired && cur != pw_last_wls) {
-                // unplug -> always back to the last wireless device, even if
-                // the vendor stack already hopped to another wireless slot
-                wireless_devs_change(cur, pw_last_wls, false);
+
+        if (wired) {
+            uint8_t cur = wireless_get_current_devs();
+            if (cur != PW_DEVS_USB) {
+                if (!pw_cable_timer) pw_cable_timer = timer_read32();
+                if (timer_elapsed32(pw_cable_timer) >= 80) {
+                    pw_cable_timer = 0;
+                    wireless_devs_change(cur, PW_DEVS_USB, false); // plug -> wired
+                }
+            } else {
+                pw_cable_timer = 0;
             }
-        }
-        // extra safety: never sleep while stuck on USB with no host
-        if (cur == PW_DEVS_USB && !usb_host) {
-            lpwr_set_timeout_manual(false);
-            lpwr_set_state(0);
+        } else {
+            uint8_t target = pw_frozen_valid ? pw_frozen_wls : pw_last_wls;
+            uint8_t cur    = wireless_get_current_devs();
+            if (cur != target) {
+                // retry (throttled) until the frozen wireless device wins
+                if (!pw_cable_timer || timer_elapsed32(pw_cable_timer) >= 60) {
+                    pw_cable_timer = timer_read32();
+                    wireless_devs_change(cur, target, false);
+                }
+            } else {
+                pw_cable_timer = 0;
+            }
+            // extra safety: never sleep while stuck on USB with no host
+            if (cur == PW_DEVS_USB && !usb_host) {
+                lpwr_set_timeout_manual(false);
+                lpwr_set_state(0);
+            }
         }
     }
 
