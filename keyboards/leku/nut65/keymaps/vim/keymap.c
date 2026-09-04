@@ -181,8 +181,11 @@ static void pw_boot_wireless(void) {
     pw_combo = false;
     pw_del   = false;
     pw_spc   = false;
-    // Drive the vendor LPWR through WAKEUP so its wakeup_cb restores RGB /
-    // LEDs exactly as on any other wake.
+    // Restore LEDs/RGB explicitly (vendor wakeup_cb may skip RGB when its
+    // rgb_enable_bak got cleared by the intermediate presleep), then drive
+    // the vendor LPWR through WAKEUP to finish the normal wake path.
+    rgb_matrix_enable_noeeprom();
+    suspend_wakeup_init();
     lpwr_set_state(3); // LPWR_WAKEUP
     if (wireless_get_current_devs() == PW_DEVS_USB) {
         wireless_devs_change(PW_DEVS_USB, pw_last_wls, false);
