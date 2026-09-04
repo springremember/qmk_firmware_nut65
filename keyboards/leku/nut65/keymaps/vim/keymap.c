@@ -160,8 +160,18 @@ static bool     pw_spc = false;
 static bool     pw_combo = false;
 static uint32_t pw_combo_timer = 0;
 static uint8_t  pw_last_wls = PW_DEVS_2G4; // remembered non-USB device
+static bool     pw_last_valid = false;     // whether a real wireless devs seen
 static bool     pw_cable_last = false;
 static uint32_t pw_cable_timer = 0;
+
+// Fired by the wireless stack on every device switch - capture the last
+// genuinely used wireless device (BT1/2G4), not a default.
+void wireless_devs_change_user(uint8_t old_devs, uint8_t new_devs, bool reset) {
+    if (new_devs != PW_DEVS_USB) {
+        pw_last_wls   = new_devs;
+        pw_last_valid = true;
+    }
+}
 
 static bool pw_no_cable(void) {
     return !readPin(HS_BAT_CABLE_PIN);
@@ -399,18 +409,16 @@ void housekeeping_task_user(void) {
         suspend_wakeup_init();
     }
 
-    // Remember the last non-USB device so unplugging can return to wireless
-    if (!pw_off) {
-        uint8_t cur = wireless_get_current_devs();
-        if (cur != PW_DEVS_USB) pw_last_wls = cur;
-    }
-
     // Remember the last non-USB device so unplugging can return to wireless,
     // then USB auto switch driven by the live USB host (plus cable pin as a
-    // fall back). Unplug -> hop back to wireless; plug -> wired.
+    // fall back). Unplug -> hop back to the last wireless device; plug ->
+    // wired.
     if (!pw_off) {
         uint8_t cur = wireless_get_current_devs();
-        if (cur != PW_DEVS_USB) pw_last_wls = cur;
+        if (cur != PW_DEVS_USB) {
+            pw_last_wls   = cur;
+            pw_last_valid = true;
+        }
 
         bool usb_host   = hs_usb_active();
         bool line_cable = !pw_no_cable(); // pin fall back
@@ -423,8 +431,10 @@ void housekeeping_task_user(void) {
             cur            = wireless_get_current_devs();
             if (wired && cur != PW_DEVS_USB) {
                 wireless_devs_change(cur, PW_DEVS_USB, false); // plug -> wired
-            } else if (!wired && cur == PW_DEVS_USB) {
-                wireless_devs_change(PW_DEVS_USB, pw_last_wls, false); // unplug -> wireless
+            } else if (!wired && cur != pw_last_wls) {
+                // unplug -> always back to the last wireless device, even if
+                // the vendor stack already hopped to another wireless slot
+                wireless_devs_change(cur, pw_last_wls, false);
             }
         }
         // extra safety: never sleep while stuck on USB with no host
