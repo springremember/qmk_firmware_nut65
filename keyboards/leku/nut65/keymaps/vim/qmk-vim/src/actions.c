@@ -63,13 +63,18 @@ static bool process_vim_action(uint16_t keycode, const keyrecord_t *record) {
                 action_func();
             }
             else {
-                VIM_END();
-                tap_code(KC_RIGHT);
-                tap_code(KC_UP);
+                // Column-0 anchor: unaffected by editor Right-wrap behaviour,
+                // works on the last line and empty lines alike.
+                VIM_HOME();
                 DO_NUMBERED_ACTION(
                     tap_code16(LSFT(KC_DOWN));
                 );
                 action_func();
+                if (action_func == delete_action) {
+                    // one Home after a line delete: smart-home editors land on
+                    // the first non-blank like real vim dd, others are no-ops
+                    tap_code(KC_HOME);
+                }
                 yanked_line = true;
             }
             return false;
