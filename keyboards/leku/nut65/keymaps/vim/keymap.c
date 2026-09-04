@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include QMK_KEYBOARD_H
+#include <string.h>
 #include "rgb_record/rgb_record.h"
 #include "qmk-vim/src/vim.h"
 #include "qmk-vim/src/modes.h"
@@ -297,6 +298,75 @@ bool process_normal_mode_user(uint16_t keycode, const keyrecord_t *record) {
     return true;
 }
 
+/* ===== SQL snippet completion: type a tracked keyword, then Ctrl+P =====
+ * Only plain lowercase letters feed the tracking stack (max 9); bare
+ * modifiers are ignored and any other typed key clears it. Ctrl+P in a
+ * typing context (Insert mode or vim off) expands an exact dictionary match
+ * via SEND_STRING. Extend by adding entries to sql_dict[].
+ */
+#define SQL_STACK_SIZE 9
+static char    sql_key_stack[SQL_STACK_SIZE] = {0};
+static uint8_t sql_stack_len = 0;
+
+static void sql_push_key(uint16_t keycode) {
+    if (keycode >= KC_A && keycode <= KC_Z) {
+        char c = 'a' + (keycode - KC_A);
+        if (sql_stack_len == SQL_STACK_SIZE) {
+            memmove(sql_key_stack, sql_key_stack + 1, SQL_STACK_SIZE - 1);
+            sql_stack_len = SQL_STACK_SIZE - 1;
+        }
+        sql_key_stack[sql_stack_len++] = c;
+        return;
+    }
+    if (keycode >= KC_LCTL && keycode <= KC_RGUI) return; // bare modifiers
+    memset(sql_key_stack, 0, SQL_STACK_SIZE);
+    sql_stack_len = 0;
+}
+
+typedef struct {
+    const char *keyword;
+    const char *snippet;
+} sql_completion_t;
+
+static const sql_completion_t sql_dict[] = {
+    {"select",
+     "\nset isolation to dirty read;\n"
+     "select\n"
+     "*\n"
+     "from\n"
+     "\n"
+     "where 1=1\n"
+     "-- group by \n"
+     "-- order by \n"
+     "-- having count(*)\n"
+     "limit 20 \n"
+     ";"
+     // 6x Up so the cursor rests on the blank line under "from"
+     SS_TAP(X_UP) SS_TAP(X_UP) SS_TAP(X_UP)
+     SS_TAP(X_UP) SS_TAP(X_UP) SS_TAP(X_UP)}
+};
+
+static void sql_trigger_completion(void) {
+    if (sql_stack_len == 0) return;
+    for (int i = 0; i < (int)(sizeof(sql_dict) / sizeof(sql_completion_t)); i++) {
+        const char *kw   = sql_dict[i].keyword;
+        int kw_len       = strlen(kw);
+        if (sql_stack_len != kw_len) continue;
+        bool match = true;
+        for (int j = 0; j < sql_stack_len; j++) {
+            if (sql_key_stack[j] != kw[j]) { match = false; break; }
+        }
+        if (!match) continue;
+        uint8_t saved_mods = get_mods();
+        clear_mods(); // the held Ctrl must not pollute the typed snippet
+        SEND_STRING(sql_dict[i].snippet);
+        set_mods(saved_mods);
+        memset(sql_key_stack, 0, SQL_STACK_SIZE);
+        sql_stack_len = 0;
+        return;
+    }
+}
+
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     bool pw_ok = (wireless_get_current_devs() != PW_DEVS_USB); // combo only off-wire
     // ---- Right Shift (_BL): hold to switch into the _GO layer (F-row +
@@ -452,6 +522,14 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         }
     }
 
+    // ---- SQL completion trigger: Ctrl+P expands the tracked keyword.
+    // Typing contexts only (Insert mode or vim off). ----
+    if (record->event.pressed && keycode == KC_P && (get_mods() & MOD_MASK_CTRL) &&
+        (!vim_mode_enabled() || get_vim_mode() == INSERT_MODE)) {
+        sql_trigger_completion();
+        return false;
+    }
+
     if (!process_vim_mode(keycode, record)) {
         return false;
     }
@@ -464,6 +542,10 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         return false;
     }
 
+    // Track actually-typed keys for the SQL completion stack
+    if (record->event.pressed) {
+        sql_push_key(keycode);
+    }
     return true;
 }
 

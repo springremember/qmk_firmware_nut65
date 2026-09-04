@@ -91,6 +91,28 @@ Vim 模式**默认开启**，开机即处于 Normal 模式。可通过 `Fn` + `C
 
 > h/j/k/l 仍是文本光标移动，互不影响；带修饰键（Shift/Ctrl 等）时方向键保持原行为；Insert/Visual 模式不受影响。
 
+### SQL 模板补全（Insert 模式或 vim 关闭时）
+
+输入小写 `select` 后按 `Ctrl+P`，自动展开多行模板：
+
+```sql
+set isolation to dirty read;
+select
+*
+from
+
+where 1=1
+-- group by 
+-- order by 
+-- having count(*)
+limit 20 
+;
+```
+
+光标自动停在 `from` 下面的空行，直接输入表名即可。
+
+> 规则：仅小写字母被跟踪（`sel`/`SELECT` 不触发）；输入空格/数字/符号等会清除跟踪；触发后跟踪自动清空。后续可在 keymap.c 的 `sql_dict[]` 里按 `{"关键字", "片段"}` 扩展词条。
+
 ## 三、F 区：_GO 层（按住右 Shift 切换）
 
 **按住右 `Shift`** 切换到 _GO 层，松开回归原层（该键不再作 Shift 用，Shift 组合请用左 `Shift`）：
