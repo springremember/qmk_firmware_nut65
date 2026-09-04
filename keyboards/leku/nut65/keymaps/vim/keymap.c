@@ -283,9 +283,6 @@ bool process_normal_mode_user(uint16_t keycode, const keyrecord_t *record) {
             case LSFT(KC_SLSH):
                 tap_code16(LCTL(KC_F));
                 return false;
-            case KC_ENT:
-                tap_code(KC_ENT);
-                return false;
             case LSFT(KC_J):
                 tap_code(KC_END);   // join next line onto this one
                 tap_code(KC_DELETE);
@@ -424,6 +421,35 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 #endif
         }
         return false;
+    }
+
+    // ---- Normal mode mouse emulation: physical arrows move the mouse
+    // pointer (hjkl stays the text cursor), Enter = left click. Only without
+    // modifiers, so Shift+arrow etc. keep their plain behaviour; Insert and
+    // Visual modes are untouched. ----
+    if (vim_mode_enabled() && get_vim_mode() == NORMAL_MODE && get_mods() == 0) {
+        uint16_t ms = 0;
+        switch (keycode) {
+            case KC_UP:   ms = KC_MS_UP;   break;
+            case KC_DOWN: ms = KC_MS_DOWN; break;
+            case KC_LEFT: ms = KC_MS_LEFT; break;
+            case KC_RGHT: ms = KC_MS_RIGHT; break;
+            case KC_ENT:
+                if (record->event.pressed) {
+                    tap_code(KC_BTN1); // left click
+                }
+                return false;
+            default:
+                break;
+        }
+        if (ms) {
+            if (record->event.pressed) {
+                register_code(ms);   // hold to keep moving (QMK mouse accel)
+            } else {
+                unregister_code(ms);
+            }
+            return false;
+        }
     }
 
     if (!process_vim_mode(keycode, record)) {
