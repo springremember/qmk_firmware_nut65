@@ -330,16 +330,16 @@ typedef struct {
 
 static const sql_completion_t sql_dict[] = {
     {"select",
-     "\nset isolation to dirty read;\n"
-     "select\n"
-     "*\n"
-     "from\n"
-     "\n"
-     "where 1=1\n"
-     "-- group by \n"
-     "-- order by \n"
-     "-- having count(*)\n"
-     "limit 20 \n"
+     "set isolation to dirty read;" SS_LSFT("\n")
+     "select" SS_LSFT("\n")
+     "*" SS_LSFT("\n")
+     "from" SS_LSFT("\n")
+     SS_LSFT("\n")
+     "where 1=1" SS_LSFT("\n")
+     "-- group by " SS_LSFT("\n")
+     "-- order by " SS_LSFT("\n")
+     "-- having count(*)" SS_LSFT("\n")
+     "limit 20 " SS_LSFT("\n")
      ";"
      // 6x Up so the cursor rests on the blank line under "from"
      SS_TAP(X_UP) SS_TAP(X_UP) SS_TAP(X_UP)
@@ -359,6 +359,9 @@ static void sql_trigger_completion(void) {
         if (!match) continue;
         uint8_t saved_mods = get_mods();
         clear_mods(); // the held Ctrl must not pollute the typed snippet
+        for (int b = 0; b < kw_len; b++) {
+            tap_code(KC_BSPC); // erase the typed keyword, the snippet replaces it
+        }
         SEND_STRING(sql_dict[i].snippet);
         set_mods(saved_mods);
         memset(sql_key_stack, 0, SQL_STACK_SIZE);

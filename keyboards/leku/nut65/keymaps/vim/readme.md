@@ -93,7 +93,7 @@ Vim 模式**默认开启**，开机即处于 Normal 模式。可通过 `Fn` + `C
 
 ### SQL 模板补全（Insert 模式或 vim 关闭时）
 
-输入小写 `select` 后按 `Ctrl+P`，自动展开多行模板：
+输入小写 `select` 后按 `Ctrl+P`，**原词被删除并展开**为多行模板（模板内换行使用 Shift+Enter）：
 
 ```sql
 set isolation to dirty read;
