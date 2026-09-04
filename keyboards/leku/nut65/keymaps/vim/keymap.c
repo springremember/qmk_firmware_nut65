@@ -155,16 +155,19 @@ static uint16_t esc_press_timer = 0;
 /* ===== Replace mode (vim R: overwrite chars until Esc) ===== */
 static bool replace_active = false;
 
-/* ===== Power combo: the original Delete key (row1 col14, now grave `) +
- * Space held >= 3s with no USB cable = deep-sleep power toggle.
+/* ===== Power combo: Ctrl + Right Alt + the original Insert key (row0 col14)
+ * held >= 3s with no USB cable = deep-sleep power toggle. While the combo is
+ * pending the involved keys are swallowed so nothing leaks to the host.
  * pw_off: any key wakes the MCU, but only a fresh >=3s combo boots wireless
  * again; every other key is swallowed and it goes straight back to sleep.
  */
 #define PW_HOLD_MS 3000
 static bool     pw_off = false;
-static bool     pw_del = false; // the original-Delete (grave) combo key
-static bool     pw_spc = false;
+static bool     pw_ctrl = false;        // combo key 1: either Ctrl
+static bool     pw_ralt = false;        // combo key 2: Right Alt
+static bool     pw_ins  = false;        // combo key 3: original Insert (row0 col14)
 static bool     pw_combo = false;
+static bool     pw_combo_latch = false; // block re-engage until all released
 static uint32_t pw_combo_timer = 0;
 static uint8_t  pw_last_wls = PW_DEVS_2G4;   // remembered non-USB device
 static bool     pw_last_valid = false;       // whether a real wireless devs seen
@@ -196,8 +199,9 @@ static bool pw_no_cable(void) {
 static void pw_enter_sleep(void) {
     pw_off   = true;
     pw_combo = false;
-    pw_del   = false;
-    pw_spc   = false;
+    pw_ctrl  = false;
+    pw_ralt  = false;
+    pw_ins   = false;
     clear_keyboard();
     lpwr_set_state(1); // LPWR_PRESLEEP -> LPWR_STOP (deep sleep)
 }
@@ -205,8 +209,9 @@ static void pw_enter_sleep(void) {
 static void pw_boot_wireless(void) {
     pw_off   = false;
     pw_combo = false;
-    pw_del   = false;
-    pw_spc   = false;
+    pw_ctrl  = false;
+    pw_ralt  = false;
+    pw_ins   = false;
     // Stale frozen device from before the sleep must not force itself back
     // after boot - manual BT/2.4G switching has to work again.
     pw_frozen_valid  = false;
@@ -396,60 +401,33 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         return false;
     }
 
-    // ---- Grave key (row1 col14, the original Delete position): normal `~
-    // typing, and the power-combo key (identified by matrix position so the
-    // _GO layer's own grave never arms it). ----
-    if (keycode == KC_GRV) {
-        bool is_pw_key = (record->event.key.row == 1 && record->event.key.col == 14);
-        if (record->event.pressed) {
-            if (is_pw_key && pw_ok) {
-                pw_del = true;
-                if (pw_del && pw_spc && !pw_combo) { // power combo engaged
-                    pw_combo       = true;
-                    pw_combo_timer = timer_read32();
-                    clear_keyboard();
-                    return false;
-                }
-            }
-            if (pw_off) {
-                pw_enter_sleep();
-                return false;
-            }
-            return true; // normal `~ behaviour
-        } else {
-            if (is_pw_key && pw_ok) {
-                pw_del = false;
-                if (pw_combo) pw_combo = false;
-            }
-            if (pw_off) pw_enter_sleep(); // released without a full combo
-            return true;
+    // ---- Original Insert key (row0 col14): third key of the power combo
+    // (Ctrl + Right Alt + Ins). Swallowed while the combo is pending so no
+    // key leaks; normal Delete / Insert otherwise. ----
+    if (record->event.key.row == 0 && record->event.key.col == 14) {
+        pw_ins = record->event.pressed;
+        if (pw_off) {
+            if (record->event.pressed) pw_enter_sleep();
+            return false;
         }
+        if (pw_combo || (pw_ok && pw_ralt && pw_ctrl)) return false;
+        return true;
     }
 
-    // ---- Space: tracks the power combo (hold grave + Space); normal space
-    // falls through to the rest of the pipeline (mouse click in Normal mode,
-    // plain space otherwise). ----
-    if (keycode == KC_SPC) {
-        if (record->event.pressed) {
-            if (pw_ok) {
-                pw_spc = true;
-                if (pw_del && pw_spc && !pw_combo) { // power combo engaged
-                    pw_combo       = true;
-                    pw_combo_timer = timer_read32();
-                    clear_keyboard();
-                    return false;
-                }
-            }
-            if (pw_off) return false;
-            // fall through (Normal mode: mouse click, else plain space)
-        } else {
-            if (pw_ok) {
-                pw_spc = false;
-                if (pw_combo) pw_combo = false;
-            }
-            if (pw_off) pw_enter_sleep();
-            // fall through for the release as well
-        }
+    // ---- Right Alt: second key of the power combo; normal Right Alt
+    // otherwise. ----
+    if (keycode == KC_RALT) {
+        pw_ralt = record->event.pressed;
+        if (pw_off) return false;
+        return true;
+    }
+
+    // ---- Ctrl: first key of the power combo; tracked only, normal use
+    // untouched. ----
+    if (keycode == KC_LCTL || keycode == KC_RCTL) {
+        pw_ctrl = record->event.pressed;
+        if (pw_off) return false;
+        return true;
     }
 
     // ---- Powered off (deep sleep): only the combo wakes, everything else is
@@ -547,6 +525,12 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         }
     }
 
+    // ---- Alt+Tab: pass Tab through with the held Alt so the task switcher
+    // stays open; vim normal mode would tap LALT(Tab), releasing Alt. ----
+    if (keycode == KC_TAB && (get_mods() & MOD_MASK_ALT)) {
+        return true;
+    }
+
     // ---- SQL completion trigger: Ctrl+P expands the tracked keyword.
     // Typing contexts only (Insert mode or vim off). ----
     if (record->event.pressed && keycode == KC_P && (get_mods() & MOD_MASK_CTRL) &&
@@ -581,7 +565,7 @@ void housekeeping_task_user(void) {
     if (pw_off && (wireless_get_current_devs() == PW_DEVS_USB || !pw_no_cable())) {
         pw_off = false;
         pw_combo = false;
-        pw_del = pw_spc = false;
+        pw_ctrl = pw_ralt = pw_ins = false;
         rgb_matrix_enable_noeeprom();
         suspend_wakeup_init();
     }
@@ -642,12 +626,27 @@ void housekeeping_task_user(void) {
         }
     }
 
-    // original-Delete(_GO) + Space held for >= 3s (no cable) -> toggle power
+    // Power combo: Ctrl + Right Alt + original Insert key held >= 3s
+    // (wireless only) -> toggle deep sleep / boot wireless. Engage clears the
+    // keyboard report so nothing leaks while holding; the latch blocks a
+    // re-engage until all three keys are released again.
+    bool combo_now = (wireless_get_current_devs() != PW_DEVS_USB) && pw_ctrl && pw_ralt && pw_ins;
+    if (pw_combo_latch) {
+        if (!combo_now) pw_combo_latch = false; // all released -> re-arm
+    } else if (combo_now && !pw_combo) {
+        pw_combo       = true;
+        pw_combo_timer = timer_read32();
+        clear_keyboard();
+    } else if (pw_combo && !combo_now) {
+        pw_combo = false; // aborted before firing
+    }
     if (pw_combo && timer_elapsed32(pw_combo_timer) >= PW_HOLD_MS) {
+        pw_combo       = false;
+        pw_combo_latch = true;
         if (pw_off) {
             pw_boot_wireless(); // deep-sleep -> boot wireless
         } else {
-            pw_enter_sleep(); // running -> power off (deep sleep)
+            pw_enter_sleep();   // running -> power off (deep sleep)
         }
     }
 

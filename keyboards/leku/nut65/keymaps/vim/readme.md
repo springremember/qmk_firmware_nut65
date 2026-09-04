@@ -28,19 +28,19 @@ Vim 模式**默认开启**，开机即处于 **Insert（打字）模式**。可�
 | Replace（`R`）中按 `Esc` | 退出替换模式回 Normal，不发送 Esc |
 | Visual / Visual Line 中按 `Esc` | 交给 qmk-vim 原生处理：退出可视并回 Normal（含取消选区） |
 
-### 电源开关（仅无 USB 线时生效：`` ` ``原 Delete 位 + `Space`）
+### 电源开关（仅无 USB 线时生效：`Ctrl` + 右`Alt` + 原Insert位）
 
-`` ` ``/`~` 键（第 2 行最右，即原 `Delete` 键位）与 `Space` 组合：
+`Ctrl` + 右`Alt` + 原 `Insert` 键位（第 1 行最右，`_BL` 层为 `Delete`）三键组合：
 
 | 操作 | 效果 |
 | :--- | :--- |
-| 运行中按住 ≥3s | 进入深睡（关闭/省电，近似关机） |
+| 运行中按住 ≥3s | 进入深睡（关闭/省电，近似关机）；组合挂起期间相关按键被吞，不向主机泄露 |
 | 深睡中按住 ≥3s | 开机，恢复无线模式 |
 | 深睡中按其它任意键 | 仅唤醒 MCU 瞬间，随即自动重回深睡（不会误开机） |
 | 拔掉 USB 线 | 自动回到“切到 USB 前正在使用的无线设备”（如蓝牙 1），而非默认 2.4G |
 | 插上 USB 线 | 自动进入有线模式；深睡中插线立即恢复有线 |
 
-> 有 USB 线时该组合键不生效；插/拔线自动切换沿用并增强原厂行为。
+> 有 USB 线时该组合键不生效（Ctrl/右Alt/Delete 正常使用）；插/拔线自动切换沿用并增强原厂行为。
 
 ## 二、功能清单
 
@@ -144,7 +144,7 @@ limit 20
 
 键盘层定义（keymap）中：
 - `_FL`（win FN 层）、`_MBL` / `_MFL`（mac 层）、`_DEFA`：与厂商默认**逐键一致，未改动**
-- `_BL`（win Base 层）按用户要求改动键位：`Insert→Delete`、原 `Delete`（grave 位）→ `` ` ``/`~` 键（兼电源组合键）、右 `Shift`→**按住切 _GO 层**、`PageUp→KC_WFWD`、`PageDown→KC_WBAK`，其余一致
+- `_BL`（win Base 层）按用户要求改动键位：`Insert→Delete`、原 `Delete`（grave 位）→ `` ` ``/`~` 键、右 `Shift`→**按住切 _GO 层**、`PageUp→KC_WFWD`、`PageDown→KC_WBAK`，其余一致
 - 新增 `_GO` 层（F 区 + `` ` ``，见上文；keyboard.json 动态层数相应为 6）
 
 所有 Vim 功能均为键码拦截实现，不新增/改造任何层。
