@@ -378,7 +378,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     if (record->event.key.row == 0 && record->event.key.col == 14) {
         pw_ins = record->event.pressed;
         if (pw_off) {
-            if (record->event.pressed) pw_enter_sleep();
+            if (!record->event.pressed) pw_enter_sleep(); // released: aborted combo
             return false;
         }
         if (pw_combo || (pw_ok && pw_ralt && pw_ctrl)) return false;
@@ -389,7 +389,10 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // otherwise. ----
     if (keycode == KC_RALT) {
         pw_ralt = record->event.pressed;
-        if (pw_off) return false;
+        if (pw_off) {
+            if (!record->event.pressed) pw_enter_sleep(); // released: aborted combo
+            return false;
+        }
         return true;
     }
 
@@ -397,7 +400,10 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // untouched. ----
     if (keycode == KC_LCTL || keycode == KC_RCTL) {
         pw_ctrl = record->event.pressed;
-        if (pw_off) return false;
+        if (pw_off) {
+            if (!record->event.pressed) pw_enter_sleep(); // released: aborted combo
+            return false;
+        }
         return true;
     }
 
@@ -411,12 +417,16 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // ---- Right Shift combos (replaces the old _GO layer): Right Shift + Esc
     // = grave (add left Shift for ~), Right Shift + 1..0/-/= = F1..F12. Any
     // other key keeps normal right-shift behaviour. ----
-    if ((get_mods() & MOD_RSFT) &&
+    // NOTE: get_mods() is the 8-bit HID mod byte, while the MOD_R*/MOD_L*
+    // constants are QMK's 5-bit packed encoding (MOD_RSFT=0x12 would match
+    // Left-Shift 0x02 and Right-Ctrl 0x10 instead!). Always mask with the
+    // 8-bit MOD_BIT_* constants here.
+    if ((get_mods() & MOD_BIT_RSHIFT) &&
         (keycode == KC_ESC || (keycode >= KC_1 && keycode <= KC_0) || keycode == KC_MINS || keycode == KC_EQL)) {
         if (record->event.pressed) {
             uint16_t repl;
             if (keycode == KC_ESC) {
-                repl = (get_mods() & MOD_LSFT) ? LSFT(KC_GRV) : KC_GRV;
+                repl = (get_mods() & MOD_BIT_LSHIFT) ? LSFT(KC_GRV) : KC_GRV;
             } else if (keycode == KC_MINS) {
                 repl = KC_F11;
             } else if (keycode == KC_EQL) {
