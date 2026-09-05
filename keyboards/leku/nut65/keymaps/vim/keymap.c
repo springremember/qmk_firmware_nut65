@@ -136,6 +136,8 @@ static bool esc_visual_exit = false;
 /* ===== Esc tap/hold: short tap = real Esc, long press = Normal mode ===== */
 #define ESC_HOLD_TIME 200
 static uint16_t esc_press_timer = 0;
+#define SPC_HOLD_TIME 200 // Normal mode Space: short=left click, long=right
+static uint16_t spc_press_timer = 0;
 
 /* ===== Replace mode (vim R: overwrite chars until Esc) ===== */
 static bool replace_active = false;
@@ -555,7 +557,16 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             case KC_RGHT: ms = KC_MS_RIGHT; break;
             case KC_SPC:
                 if (record->event.pressed) {
-                    tap_code(KC_BTN1); // left click
+                    spc_press_timer = timer_read(); // short=left click, long=right
+                } else {
+                    if (spc_press_timer) {
+                        if (timer_elapsed(spc_press_timer) < SPC_HOLD_TIME) {
+                            tap_code(KC_BTN1); // left click
+                        } else {
+                            tap_code(KC_BTN2); // right click
+                        }
+                        spc_press_timer = 0;
+                    }
                 }
                 return false;
             default:
