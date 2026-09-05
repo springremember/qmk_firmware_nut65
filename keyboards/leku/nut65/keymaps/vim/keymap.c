@@ -456,25 +456,25 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         return false;
     }
 
-    // ---- Right Shift + arrows = media keys: Left/Right = volume down/up,
-    // Up/Down = brightness up/down. Press requires Right Shift; release
+    // ---- Right Shift + WASD = media keys: A/D = volume down/up,
+    // W/S = brightness up/down. Press requires Right Shift; release
     // always unregisters (even if Right Shift was let go first) so the
-    // media key can never stick. ----
-    if (keycode == KC_LEFT || keycode == KC_RGHT || keycode == KC_UP || keycode == KC_DOWN) {
-        static bool rsft_arrow_active = false;
+    // media key can never stick. Arrows keep their normal behaviour. ----
+    if (keycode == KC_A || keycode == KC_D || keycode == KC_W || keycode == KC_S) {
+        static bool rsft_wasd_active = false;
         if (record->event.pressed) {
             if (get_mods() & MOD_BIT_RSHIFT) {
-                rsft_arrow_active = true;
+                rsft_wasd_active = true;
                 switch (keycode) {
-                    case KC_LEFT: register_code(KC_VOLD); break; // volume down
-                    case KC_RGHT: register_code(KC_VOLU); break; // volume up
-                    case KC_UP:   register_code(KC_BRIU); break; // brightness up
-                    case KC_DOWN: register_code(KC_BRID); break; // brightness down
+                    case KC_A: register_code(KC_VOLD); break; // volume down
+                    case KC_D: register_code(KC_VOLU); break; // volume up
+                    case KC_W: register_code(KC_BRIU); break; // brightness up
+                    case KC_S: register_code(KC_BRID); break; // brightness down
                 }
                 return false;
             }
-        } else if (rsft_arrow_active) {
-            rsft_arrow_active = false;
+        } else if (rsft_wasd_active) {
+            rsft_wasd_active = false;
             unregister_code(KC_VOLD);
             unregister_code(KC_VOLU);
             unregister_code(KC_BRIU);
