@@ -38,7 +38,7 @@ enum layers {
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [_BL] = LAYOUT( /* win Base */
         KC_ESC,   KC_1,       KC_2,       KC_3,     KC_4,     KC_5,     KC_6,     KC_7,     KC_8,     KC_9,     KC_0,       KC_MINS,  KC_EQL,   KC_BSPC,   KC_DEL,
-        KC_TAB,   KC_Q,       KC_W,       KC_E,     KC_R,     KC_T,     KC_Y,     KC_U,     KC_I,     KC_O,     KC_P,       KC_LBRC,  KC_RBRC,  KC_BSLS,   KC_PSCR,
+        KC_TAB,   KC_Q,       KC_W,       KC_E,     KC_R,     KC_T,     KC_Y,     KC_U,     KC_I,     KC_O,     KC_P,       KC_LBRC,  KC_RBRC,  KC_BSLS,   LWIN(LSFT(KC_S)),
         KC_CAPS,  KC_A,       KC_S,       KC_D,     KC_F,     KC_G,     KC_H,     KC_J,     KC_K,     KC_L,     KC_SCLN,    KC_QUOT,            KC_ENT,    KC_WFWD,
         KC_LSFT,              KC_Z,       KC_X,     KC_C,     KC_V,     KC_B,     KC_N,     KC_M,     KC_COMM,  KC_DOT,     KC_SLSH,  KC_RSFT,  KC_UP,     KC_WBAK,
         KC_LCTL,  KC_LCMD,    KC_LALT,                        KC_SPC,                                           KC_RALT,    MO(_FL),  KC_LEFT,  KC_DOWN,   KC_RGHT,
@@ -682,13 +682,15 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
         }
     }
 
-    rgb_matrix_set_color(6, r, g, b);  // Caps single LED (full brightness)
-    rgb_matrix_set_color(56, r, g, b); // Esc single LED
-    rgb_matrix_set_color(70, r, g, b); // Delete (was Insert) single LED
+    // Mode keys at 60% brightness
+    uint8_t k_r = r * 60 / 100, k_g = g * 60 / 100, k_b = b * 60 / 100;
+    rgb_matrix_set_color(6, k_r, k_g, k_b);  // Caps LED
+    rgb_matrix_set_color(56, k_r, k_g, k_b); // Esc LED
+    rgb_matrix_set_color(70, k_r, k_g, k_b); // Delete (was Insert) LED
 
     // Bottom strip = battery level (highest priority). Number of lit LEDs is
     // fixed by the charge level (both ends turned off toward the middle), the
-    // mode only chooses the colour.
+    // mode only chooses the colour. Strip brightness: 9%.
     uint8_t c_r = r;
     uint8_t c_g = g;
     uint8_t c_b = b;
@@ -697,9 +699,9 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
         c_g = 0x80;
         c_b = 0x00;
     }
-    c_r /= 2; // keep the strip readable but not dazzling
-    c_g /= 2;
-    c_b /= 2;
+    c_r = c_r * 9 / 100;
+    c_g = c_g * 9 / 100;
+    c_b = c_b * 9 / 100;
 
     uint8_t bat;
     if (wireless_get_current_devs() == PW_DEVS_USB) {

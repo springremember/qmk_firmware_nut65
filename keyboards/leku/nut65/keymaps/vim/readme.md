@@ -135,16 +135,16 @@ limit 20
 | Visual / Visual Line | 紫 |
 | Vim 关闭（透传） | 红 |
 
-跟随模式色的键位灯（满亮）：`Caps`、`Esc`、`Delete`（原 Insert 位）。
+跟随模式色的键位灯（60% 亮度）：`Caps`、`Esc`、`Delete`（原 Insert 位）。
 
-**底部灯条 = 电量指示（第一优先级）**：80 颗底部灯中亮起的颗数固定由电量决定——从左右两端向中间熄灭，只保留中央与电量等比的灯段（如 50% 电量亮中央 40 颗）。模式/状态只影响该段灯的颜色（Normal 蓝 / Insert 绿 / Visual 紫 / R 替换橙 / Vim 关闭红），不影响亮灯数量。USB 有线（插线）时视为满电，底部灯条**全亮**。
+**底部灯条 = 电量指示（第一优先级，亮度 9%）**：80 颗底部灯中亮起的颗数固定由电量决定——从左右两端向中间熄灭，只保留中央与电量等比的灯段（如 50% 电量亮中央 40 颗）。模式/状态只影响该段灯的颜色（Normal 蓝 / Insert 绿 / Visual 紫 / R 替换橙 / Vim 关闭红），不影响亮灯数量。USB 有线（插线）时视为满电，底部灯条**全亮**。
 > 侧灯（底部灯条两端角落小灯）不参与电量显示，随模式熄灭。
 
 ## 五、与厂商固件的差异
 
 键盘层定义（keymap）中：
 - `_FL`（win FN 层）、`_MBL` / `_MFL`（mac 层）、`_DEFA`：与厂商默认**逐键一致，未改动**
-- `_BL`（win Base 层）按用户要求改动键位：`Insert→Delete`、原 `Delete`（grave 位）→ `` ` ``/`~` 键、`PageUp→KC_WFWD`、`PageDown→KC_WBAK`，其余一致；右 `Shift` 组合键（grave/F 区）见上文
+- `_BL`（win Base 层）按用户要求改动键位：`Insert→Delete`、原 `Delete` 位→**截图键**（`Win+Shift+S`，Windows 截图界面；grave 由 右`Shift`+`Esc` 提供）、`PageUp→KC_WFWD`、`PageDown→KC_WBAK`，其余一致；右 `Shift` 组合键（grave/F 区）见上文
 
 所有 Vim 功能均为键码拦截实现，不新增/改造任何层。
 
