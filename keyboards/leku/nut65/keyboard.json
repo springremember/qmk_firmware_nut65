@@ -340,7 +340,7 @@
         "default": {
             "animation": "cycle_out_in_dual",
             "speed": 38,
-            "val": 84
+            "val": 28
         }
     },
     "rgblight": {

@@ -682,8 +682,8 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
         }
     }
 
-    // Mode keys at 60% brightness
-    uint8_t k_r = r * 60 / 100, k_g = g * 60 / 100, k_b = b * 60 / 100;
+    // Mode keys at 33% brightness
+    uint8_t k_r = r * 33 / 100, k_g = g * 33 / 100, k_b = b * 33 / 100;
     rgb_matrix_set_color(6, k_r, k_g, k_b);  // Caps LED
     rgb_matrix_set_color(56, k_r, k_g, k_b); // Esc LED
     rgb_matrix_set_color(70, k_r, k_g, k_b); // Delete (was Insert) LED
@@ -699,9 +699,9 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
         c_g = 0x80;
         c_b = 0x00;
     }
-    c_r = c_r * 9 / 100;
-    c_g = c_g * 9 / 100;
-    c_b = c_b * 9 / 100;
+    c_r = c_r * 7 / 100;
+    c_g = c_g * 7 / 100;
+    c_b = c_b * 7 / 100;
 
     uint8_t bat;
     if (wireless_get_current_devs() == PW_DEVS_USB) {
