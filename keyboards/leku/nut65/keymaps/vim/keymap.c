@@ -38,7 +38,7 @@ enum layers {
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [_BL] = LAYOUT( /* win Base */
         KC_ESC,   KC_1,       KC_2,       KC_3,     KC_4,     KC_5,     KC_6,     KC_7,     KC_8,     KC_9,     KC_0,       KC_MINS,  KC_EQL,   KC_BSPC,   KC_DEL,
-        KC_TAB,   KC_Q,       KC_W,       KC_E,     KC_R,     KC_T,     KC_Y,     KC_U,     KC_I,     KC_O,     KC_P,       KC_LBRC,  KC_RBRC,  KC_BSLS,   LWIN(LSFT(KC_S)),
+        KC_TAB,   KC_Q,       KC_W,       KC_E,     KC_R,     KC_T,     KC_Y,     KC_U,     KC_I,     KC_O,     KC_P,       KC_LBRC,  KC_RBRC,  KC_BSLS,   LALT(KC_F4),
         KC_CAPS,  KC_A,       KC_S,       KC_D,     KC_F,     KC_G,     KC_H,     KC_J,     KC_K,     KC_L,     KC_SCLN,    KC_QUOT,            KC_ENT,    KC_WFWD,
         KC_LSFT,              KC_Z,       KC_X,     KC_C,     KC_V,     KC_B,     KC_N,     KC_M,     KC_COMM,  KC_DOT,     KC_SLSH,  KC_RSFT,  KC_UP,     KC_WBAK,
         KC_LCTL,  KC_LCMD,    KC_LALT,                        KC_SPC,                                           KC_RALT,    MO(_FL),  KC_LEFT,  KC_DOWN,   KC_RGHT,
@@ -454,6 +454,33 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             set_mods(saved_mods);
         }
         return false;
+    }
+
+    // ---- Right Shift + arrows = media keys: Left/Right = volume down/up,
+    // Up/Down = brightness up/down. Press requires Right Shift; release
+    // always unregisters (even if Right Shift was let go first) so the
+    // media key can never stick. ----
+    if (keycode == KC_LEFT || keycode == KC_RGHT || keycode == KC_UP || keycode == KC_DOWN) {
+        static bool rsft_arrow_active = false;
+        if (record->event.pressed) {
+            if (get_mods() & MOD_BIT_RSHIFT) {
+                rsft_arrow_active = true;
+                switch (keycode) {
+                    case KC_LEFT: register_code(KC_VOLD); break; // volume down
+                    case KC_RGHT: register_code(KC_VOLU); break; // volume up
+                    case KC_UP:   register_code(KC_BRIU); break; // brightness up
+                    case KC_DOWN: register_code(KC_BRID); break; // brightness down
+                }
+                return false;
+            }
+        } else if (rsft_arrow_active) {
+            rsft_arrow_active = false;
+            unregister_code(KC_VOLD);
+            unregister_code(KC_VOLU);
+            unregister_code(KC_BRIU);
+            unregister_code(KC_BRID);
+            return false;
+        }
     }
 
     // Esc: short tap sends a real Esc to the host (firmware mode unchanged);
