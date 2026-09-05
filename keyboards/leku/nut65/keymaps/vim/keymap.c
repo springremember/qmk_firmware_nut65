@@ -421,10 +421,11 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // constants are QMK's 5-bit packed encoding (MOD_RSFT=0x12 would match
     // Left-Shift 0x02 and Right-Ctrl 0x10 instead!). Always mask with the
     // 8-bit MOD_BIT_* constants here.
-    if ((keycode == KC_ESC) && (get_mods() & (MOD_BIT_LSHIFT | MOD_BIT_RSHIFT)) &&
+    if ((keycode == KC_ESC) && (get_mods() & MOD_BIT_LSHIFT) &&
         !(get_mods() & (MOD_BIT_LCTRL | MOD_BIT_RCTRL | MOD_BIT_LALT | MOD_BIT_RALT | MOD_BIT_LGUI | MOD_BIT_RGUI))) {
-        // Shift + Esc = ~ directly (no need to hold Right Shift + Left Shift
-        // at the same time); all other modifiers still let Esc through.
+        // Left Shift + Esc = ~ (Right Shift may also be held); Right-Shift-only
+        // + Esc falls through to the combo block below and sends grave.
+        // All other modifiers still let Esc through.
         if (record->event.pressed) {
             uint8_t saved_mods = get_mods();
             clear_mods();
