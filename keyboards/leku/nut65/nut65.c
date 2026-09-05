@@ -84,7 +84,7 @@ bool rec_filp;
 HSV start_hsv;
 uint8_t hs_layer_cnt            = 0;
 uint16_t hs_deb                 = DEBOUNCE;
-static bool hs_charing_filp     = false;
+// static bool hs_charing_filp     = false; // unused: battery LED painting disabled
 
 bool music_cut_flag             = true;
 bool rgblight_cut_flag          = false;
@@ -137,6 +137,13 @@ void nkr_indicators_hook(uint8_t index) {
 }
 
 void bat_indicators_hook(uint8_t index) {
+    // Battery / charge LED indication on LED 7 (Left-Ctrl position) disabled
+    // by user request so the key follows the RGB animation. The critical
+    // battery protection that used to live in the low-power branch was moved
+    // into hs_housekeeping_task_user() (it must not depend on the blink
+    // framework). The function body stays commented for reference.
+    (void)index;
+#if 0 // ---- original battery/charge indication (disabled) ----
     static uint32_t battery_process_time = 0;
     static bool bat_flip = true;
 
@@ -161,24 +168,7 @@ void bat_indicators_hook(uint8_t index) {
             rgb_matrix_blink_set_color(index, 0x00, 0x00, 0x00);
             rgb_matrix_blink_set_interval_times(index, 500, 0xFF); 
         }
-        // bat_flip = !bat_flip;
-
-        if (*md_getp_bat() <= BATTERY_CAPACITY_STOP) {
-            if (!battery_process_time) {
-                battery_process_time = timer_read32();
-            }
-
-            if (battery_process_time && timer_elapsed32(battery_process_time) > 25000) { 
-                clear_keyboard();
-                if (battery_process_time && timer_elapsed32(battery_process_time) > 26000) {
-                    clear_keyboard();
-                    battery_process_time = 0;
-                    lower_sleep          = true;
-                    md_send_devctrl(MD_SND_CMD_DEVCTRL_USB);
-                    lpwr_set_timeout_manual(true);
-                } 
-            }
-        }
+        // bat_flip = !bat_flip; 
     } else {
         hs_rgb_blink_flag = true;
         battery_process_time = 0;
@@ -188,6 +178,7 @@ void bat_indicators_hook(uint8_t index) {
     }
 
     rgb_matrix_blink_set(index);
+#endif // ---- original battery/charge indication (disabled) ----
 }
 
 typedef enum {
@@ -240,6 +231,11 @@ bool rgb_matrix_blink_user(blink_rgb_t *blink_rgb) {
 
     switch (blink_rgb->index) {
         case RGB_MATRIX_BLINK_INDEX_BAT: {
+            // Battery/charge LED painting on LED 7 (Left-Ctrl) disabled by
+            // user request; never paint, just stop the framework from doing
+            // anything with this entry.
+            return false;
+#if 0 // ---- original battery/charge blink painting (disabled) ----
             if (ind_status != ind_state_none || test_white_light_flag == true || !confinfo.hs_led_tog_flag) {
                 return false;
             }
@@ -264,6 +260,7 @@ bool rgb_matrix_blink_user(blink_rgb_t *blink_rgb) {
                 rgb_matrix_set_color(HS_MATRIX_BLINK_INDEX_BAT, 0x00, 0x00, 0x00);
             }
             return false;
+#endif // ---- original battery/charge blink painting (disabled) ----
         } break;
 
         case RGB_MATRIX_BLINK_INDEX_IND: {
@@ -1593,6 +1590,10 @@ void hs_housekeeping_task_user(void) { // loop
         }
     }
 
+    // ---- Battery/charge LED painting on LED 7 (Left-Ctrl) disabled by user
+    // request (key follows the RGB animation instead). Only the critical
+    // battery protection from the old blink hook is kept below. ----
+#if 0 // ---- original mode 29/32 charging/low-power painting (disabled) ----
     if (rgb_matrix_get_mode() == 29 || rgb_matrix_get_mode() == 32) {
         if (!(ind_status != ind_state_none || test_white_light_flag == true || !confinfo.hs_led_tog_flag)) {
             if (charging_state && ( (bat_full_flag))) { // power full
@@ -1609,6 +1610,27 @@ void hs_housekeeping_task_user(void) { // loop
                 } 
             } else {
                 hs_charing_filp = true;
+            }
+        }
+    }
+#endif // ---- original mode 29/32 charging/low-power painting (disabled) ----
+
+    // Critical battery protection (moved out of bat_indicators_hook): when
+    // the battery reaches BATTERY_CAPACITY_STOP, switch the module to USB
+    // and force a deep sleep ~25s later so the battery is not drained.
+    if (!charging_state && *md_getp_bat() <= BATTERY_CAPACITY_STOP) {
+        static uint32_t battery_stop_time = 0;
+        if (!battery_stop_time) {
+            battery_stop_time = timer_read32();
+        }
+        if (timer_elapsed32(battery_stop_time) > 25000) {
+            clear_keyboard();
+            if (timer_elapsed32(battery_stop_time) > 26000) {
+                clear_keyboard();
+                battery_stop_time = 0;
+                lower_sleep       = true;
+                md_send_devctrl(MD_SND_CMD_DEVCTRL_USB);
+                lpwr_set_timeout_manual(true);
             }
         }
     }
