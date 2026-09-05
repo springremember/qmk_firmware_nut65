@@ -421,12 +421,24 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // constants are QMK's 5-bit packed encoding (MOD_RSFT=0x12 would match
     // Left-Shift 0x02 and Right-Ctrl 0x10 instead!). Always mask with the
     // 8-bit MOD_BIT_* constants here.
+    if ((keycode == KC_ESC) && (get_mods() & (MOD_BIT_LSHIFT | MOD_BIT_RSHIFT)) &&
+        !(get_mods() & (MOD_BIT_LCTRL | MOD_BIT_RCTRL | MOD_BIT_LALT | MOD_BIT_RALT | MOD_BIT_LGUI | MOD_BIT_RGUI))) {
+        // Shift + Esc = ~ directly (no need to hold Right Shift + Left Shift
+        // at the same time); all other modifiers still let Esc through.
+        if (record->event.pressed) {
+            uint8_t saved_mods = get_mods();
+            clear_mods();
+            tap_code16(LSFT(KC_GRV)); // ~
+            set_mods(saved_mods);
+        }
+        return false;
+    }
     if ((get_mods() & MOD_BIT_RSHIFT) &&
         (keycode == KC_ESC || (keycode >= KC_1 && keycode <= KC_0) || keycode == KC_MINS || keycode == KC_EQL)) {
         if (record->event.pressed) {
             uint16_t repl;
             if (keycode == KC_ESC) {
-                repl = (get_mods() & MOD_BIT_LSHIFT) ? LSFT(KC_GRV) : KC_GRV;
+                repl = KC_GRV; // Left+Right Shift = ~ is handled above
             } else if (keycode == KC_MINS) {
                 repl = KC_F11;
             } else if (keycode == KC_EQL) {
