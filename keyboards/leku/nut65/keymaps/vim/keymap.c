@@ -502,6 +502,14 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                 normal_mode(); // leave replace mode
                 return false;
             } else {
+                // Cancel any pending vim operator (d/y/c ... awaiting a motion
+                // or double tap). normal_mode() is idempotent in Normal mode and
+                // resets process_func so a following key cannot be eaten by the
+                // half-typed action. Insert mode is untouched (it must keep
+                // typing and only deliver the real Esc to the host).
+                if (get_vim_mode() != INSERT_MODE) {
+                    normal_mode();
+                }
                 esc_visual_exit = false;
                 esc_press_timer = timer_read(); // decide tap vs hold on release
                 return false;

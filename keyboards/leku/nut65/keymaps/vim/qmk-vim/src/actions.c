@@ -78,6 +78,8 @@ static bool process_vim_action(uint16_t keycode, const keyrecord_t *record) {
                     );
                     VIM_HOME();
                     yanked_line = true;
+                    normal_mode(); // MUST reset the pending action, or the next
+                                   // motion (e.g. k) would delete again
                     return false;
                 }
                 // yy (line yank): Column-0 anchor, unaffected by editor
