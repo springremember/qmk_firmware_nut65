@@ -779,11 +779,9 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     }
 
     // Mode keys at 33% brightness
-    // Mode keys at 75% brightness (Caps no longer has a fixed light; the
-    // global effect is Solid Reactive Nexus, so Caps participates in it)
-    uint8_t k_r = r * 75 / 100, k_g = g * 75 / 100, k_b = b * 75 / 100;
-    rgb_matrix_set_color(56, k_r, k_g, k_b); // Esc LED
-    rgb_matrix_set_color(70, k_r, k_g, k_b); // Delete (was Insert) LED
+    // Mode keys at 75% brightness
+    // (Esc/Delete/Insert and Caps no longer have a fixed light; the global
+    // effect is Solid Reactive Nexus, so they participate in it)
 
     // Bottom strip = battery level (highest priority). Number of lit LEDs is
     // fixed by the charge level (both ends turned off toward the middle), the
