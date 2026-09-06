@@ -338,7 +338,7 @@
         "speed_steps": 40,
         "val_steps": 32,
         "default": {
-            "animation": "solid_reactive_nexus",
+            "animation": "solid_reactive_simple",
             "speed": 38,
             "val": 153
         }

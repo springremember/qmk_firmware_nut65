@@ -128,6 +128,22 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
 void keyboard_post_init_user(void) {
     enable_vim_mode();
     insert_mode();
+
+    // The bottom strip (LEDs 71-150) and the four corner LEDs (10/11/13/14)
+    // are dedicated pixels (battery bar / always off): their final colour is
+    // written by rgb_matrix_indicators_advanced_user, so flagging them
+    // INDICATOR stops the effect layer from rendering them every frame. The
+    // effect then only computes the ~67 key LEDs, roughly halving the
+    // per-frame reactive work that caused Bluetooth key lag on fast typing.
+    extern led_config_t g_led_config;
+    for (uint8_t i = 71; i < RGB_MATRIX_LED_COUNT; i++) {
+        g_led_config.flags[i] = LED_FLAG_INDICATOR;
+    }
+    g_led_config.flags[10] = LED_FLAG_INDICATOR;
+    g_led_config.flags[11] = LED_FLAG_INDICATOR;
+    g_led_config.flags[13] = LED_FLAG_INDICATOR;
+    g_led_config.flags[14] = LED_FLAG_INDICATOR;
+    rgb_matrix_set_flags_noeeprom(LED_FLAG_KEYLIGHT | LED_FLAG_MODIFIER | LED_FLAG_UNDERGLOW);
 }
 
 /* ===== Esc visual exit tracking ===== */
@@ -288,6 +304,9 @@ bool process_normal_mode_user(uint16_t keycode, const keyrecord_t *record) {
                 return false;
             case KC_ENT:
                 tap_code(KC_ENT); // real Enter in Normal mode
+                return false;
+            case KC_TAB:
+                tap_code(KC_TAB); // real Tab passes through in Normal mode
                 return false;
             case LSFT(KC_J):
                 tap_code(KC_END);   // join next line onto this one
