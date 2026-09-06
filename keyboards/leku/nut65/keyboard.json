@@ -338,9 +338,9 @@
         "speed_steps": 40,
         "val_steps": 32,
         "default": {
-            "animation": "cycle_out_in_dual",
+            "animation": "solid_reactive_nexus",
             "speed": 38,
-            "val": 48
+            "val": 153
         }
     },
     "rgblight": {

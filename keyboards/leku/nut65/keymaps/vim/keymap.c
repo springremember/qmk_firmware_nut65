@@ -136,8 +136,12 @@ static bool esc_visual_exit = false;
 /* ===== Esc tap/hold: short tap = real Esc, long press = Normal mode ===== */
 #define ESC_HOLD_TIME 200
 static uint16_t esc_press_timer = 0;
-#define SPC_HOLD_TIME 200 // Normal mode Space: short=left click, long=right
+#define SPC_HOLD_TIME 200 // Normal mode Space: short=left click, long=hold left (drag)
 static uint16_t spc_press_timer = 0;
+static bool     spc_holding     = false; // left button currently held down
+
+/* ===== Normal mode arrows: L+R together = right click ===== */
+static bool arrow_l = false, arrow_r = false, arrow_combo = false;
 
 /* ===== Replace mode (vim R: overwrite chars until Esc) ===== */
 static bool replace_active = false;
@@ -545,28 +549,54 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     }
 
     // ---- Normal mode mouse emulation: physical arrows move the mouse
-    // pointer (hjkl stays the text cursor), Space = left click. Only without
-    // modifiers, so Shift+arrow etc. keep their plain behaviour; Insert and
-    // Visual modes are untouched. Enter stays a normal Enter. ----
+    // pointer (hjkl stays the text cursor), Space short = left click,
+    // Space long (>=200ms) = hold left button (drag), Left+Right arrows
+    // pressed together = right click. Only without modifiers, so
+    // Shift+arrow etc. keep their plain behaviour; Insert and Visual
+    // modes are untouched. Enter stays a normal Enter. ----
     if (vim_mode_enabled() && get_vim_mode() == NORMAL_MODE && get_mods() == 0) {
         uint16_t ms = 0;
         switch (keycode) {
             case KC_UP:   ms = KC_MS_UP;   break;
             case KC_DOWN: ms = KC_MS_DOWN; break;
-            case KC_LEFT: ms = KC_MS_LEFT; break;
-            case KC_RGHT: ms = KC_MS_RIGHT; break;
+            case KC_LEFT:
+            case KC_RGHT: {
+                if (record->event.pressed) {
+                    if (keycode == KC_LEFT) arrow_l = true;
+                    else                    arrow_r = true;
+                    if (arrow_l && arrow_r) { // both held -> right click, no move
+                        if (!arrow_combo) {
+                            arrow_combo = true;
+                            tap_code(KC_BTN2);
+                        }
+                        unregister_code(KC_MS_LEFT);
+                        unregister_code(KC_MS_RIGHT);
+                    } else {
+                        register_code(keycode == KC_LEFT ? KC_MS_LEFT : KC_MS_RIGHT);
+                    }
+                } else {
+                    if (keycode == KC_LEFT) arrow_l = false;
+                    else                    arrow_r = false;
+                    if (!(arrow_l && arrow_r)) arrow_combo = false;
+                    unregister_code(KC_MS_LEFT);
+                    unregister_code(KC_MS_RIGHT);
+                    // resume the still-held single direction after the combo
+                    if (arrow_l)      register_code(KC_MS_LEFT);
+                    else if (arrow_r) register_code(KC_MS_RIGHT);
+                }
+                return false;
+            }
             case KC_SPC:
                 if (record->event.pressed) {
-                    spc_press_timer = timer_read(); // short=left click, long=right
+                    spc_press_timer = timer_read(); // short=click, long=hold
                 } else {
-                    if (spc_press_timer) {
-                        if (timer_elapsed(spc_press_timer) < SPC_HOLD_TIME) {
-                            tap_code(KC_BTN1); // left click
-                        } else {
-                            tap_code(KC_BTN2); // right click
-                        }
-                        spc_press_timer = 0;
+                    if (spc_holding) { // long hold -> release left button (drag end)
+                        unregister_code(KC_BTN1);
+                        spc_holding = false;
+                    } else if (spc_press_timer) { // short tap -> left click
+                        tap_code(KC_BTN1);
                     }
+                    spc_press_timer = 0;
                 }
                 return false;
             default:
@@ -616,6 +646,13 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 }
 
 void housekeeping_task_user(void) {
+    // Space long-press (Normal mode): once SPC_HOLD_TIME elapses while the
+    // key is still down, hold the left button down (drag) until release.
+    if (spc_press_timer && !spc_holding && timer_elapsed(spc_press_timer) >= SPC_HOLD_TIME) {
+        register_code(KC_BTN1);
+        spc_holding = true;
+    }
+
     // USB plugged (or devs switched to USB) while powered off -> recover to
     // normal wired operation (RGB was disabled by the vendor presleep, so
     // force it back on here just like the combo boot does)
@@ -734,8 +771,9 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     }
 
     // Mode keys at 33% brightness
-    uint8_t k_r = r * 33 / 100, k_g = g * 33 / 100, k_b = b * 33 / 100;
-    rgb_matrix_set_color(6, k_r, k_g, k_b);  // Caps LED
+    // Mode keys at 75% brightness (Caps no longer has a fixed light; the
+    // global effect is Solid Reactive Nexus, so Caps participates in it)
+    uint8_t k_r = r * 75 / 100, k_g = g * 75 / 100, k_b = b * 75 / 100;
     rgb_matrix_set_color(56, k_r, k_g, k_b); // Esc LED
     rgb_matrix_set_color(70, k_r, k_g, k_b); // Delete (was Insert) LED
 

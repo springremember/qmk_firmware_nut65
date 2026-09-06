@@ -63,18 +63,31 @@ static bool process_vim_action(uint16_t keycode, const keyrecord_t *record) {
                 action_func();
             }
             else {
-                // Column-0 anchor: unaffected by editor Right-wrap behaviour,
-                // works on the last line and empty lines alike.
+                if (action_func == delete_action) {
+                    // dd: delete whole current line(s). Shift+Down cannot select
+                    // the document's final line (nothing follows it), so instead:
+                    // Home -> Shift+End selects the line's text only, cut removes
+                    // it (cursor lands back on the emptied line), then Delete
+                    // drops the line's own trailing newline - which is a no-op on
+                    // the final line, making this work on every line.
+                    DO_NUMBERED_ACTION(
+                        VIM_HOME();
+                        VIM_SHIFT_END();       // select text of this line
+                        tap_code16(VIM_DELETE); // cut (deleted line is in the clipboard)
+                        tap_code(KC_DELETE);   // remove that line's newline (EOF: no-op)
+                    );
+                    VIM_HOME();
+                    yanked_line = true;
+                    return false;
+                }
+                // yy (line yank): Column-0 anchor, unaffected by editor
+                // Right-wrap behaviour, works on the last line and empty lines
+                // alike.
                 VIM_HOME();
                 DO_NUMBERED_ACTION(
                     tap_code16(LSFT(KC_DOWN));
                 );
                 action_func();
-                if (action_func == delete_action) {
-                    // one Home after a line delete: smart-home editors land on
-                    // the first non-blank like real vim dd, others are no-ops
-                    tap_code(KC_HOME);
-                }
                 yanked_line = true;
             }
             return false;
