@@ -315,6 +315,19 @@ bool process_normal_mode_user(uint16_t keycode, const keyrecord_t *record) {
             case LSFT(KC_R):
                 enter_replace_mode();
                 return false;
+            case LSFT(KC_G):
+                // G (or nG) -> bottom; 1G == gg -> very top, like vim.
+                // Exact line jumps are not possible without line navigation.
+                {
+                    extern int16_t motion_counter;
+                    if (motion_counter == 1) {
+                        tap_code16(LCTL(KC_HOME));
+                    } else {
+                        tap_code16(LCTL(KC_END));
+                    }
+                    motion_counter = 0; // consume the count
+                }
+                return false;
             default:
                 break;
         }
