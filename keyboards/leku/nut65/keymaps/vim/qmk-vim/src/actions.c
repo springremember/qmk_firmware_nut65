@@ -82,9 +82,10 @@ static bool process_vim_action(uint16_t keycode, const keyrecord_t *record) {
                                    // motion (e.g. k) would delete again
                     return false;
                 }
-                // yy (line yank): Column-0 anchor, unaffected by editor
-                // Right-wrap behaviour, works on the last line and empty lines
-                // alike.
+                // yy (line yank): anchor at column 0 of the current line, then
+                // Shift+Down pulls each whole line (text + its newline) into the
+                // selection for the copy. Equivalent to upstream's End+Right+Up
+                // dance but without depending on a next line existing.
                 VIM_HOME();
                 DO_NUMBERED_ACTION(
                     tap_code16(LSFT(KC_DOWN));
