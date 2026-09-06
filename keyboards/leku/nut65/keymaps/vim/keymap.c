@@ -421,6 +421,30 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     const uint8_t mods    = get_mods();
     const bool    vim_on  = vim_mode_enabled();
     const uint8_t vmode   = get_vim_mode();
+    // Mouse-emulation context: Normal mode with vim on, not replace-typing,
+    // no modifiers held. Snapshotted once and reused by both the emulation
+    // block and the release leak-guard below.
+    const bool    mouse_ctx = vim_on && vmode == NORMAL_MODE && !replace_active && mods == 0;
+
+    // Leak-guard: if a mouse-emulating key (Space drag / arrows) is still held
+    // when the mode leaves Normal (e.g. i/o entered, Esc, Caps), the release
+    // event arrives outside the mouse block and would otherwise leave a stuck
+    // button or stale arrow flags. Only runs when NOT in the active mouse
+    // context - in Normal the block below owns press/release handling.
+    if (!record->event.pressed && !mouse_ctx) {
+        if (spc_holding || spc_press_timer) {
+            unregister_code(KC_BTN1);
+            spc_holding      = false;
+            spc_press_timer  = 0;
+        }
+        if (arrow_l || arrow_r || arrow_combo) {
+            arrow_l = false;
+            arrow_r = false;
+            arrow_combo = false;
+            unregister_code(KC_MS_LEFT);
+            unregister_code(KC_MS_RIGHT);
+        }
+    }
 
     // ---- Original Insert key (row0 col14): third key of the power combo
     // (Ctrl + Right Alt + Ins). Swallowed while the combo is pending so no
@@ -612,7 +636,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // not in Insert, Visual or replace-typing (replace keeps vim_current_mode
     // = NORMAL internally, so replace is excluded explicitly), and Enter stays
     // a normal Enter. ----
-    if (vim_on && vmode == NORMAL_MODE && !replace_active && mods == 0) {
+    if (mouse_ctx) {
         uint16_t ms = 0;
         switch (keycode) {
             case KC_UP:   ms = KC_MS_UP;   break;
@@ -705,8 +729,11 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 
 void housekeeping_task_user(void) {
     // Space long-press (Normal mode): once SPC_HOLD_TIME elapses while the
-    // key is still down, hold the left button down (drag) until release.
-    if (spc_press_timer && !spc_holding && timer_elapsed(spc_press_timer) >= SPC_HOLD_TIME) {
+    // key is still down, hold the left button down (drag) until release. Only
+    // while still in the mouse context - if the mode left Normal mid-hold the
+    // release leak-guard in process_record_user cleans the state up.
+    if (spc_press_timer && !spc_holding && timer_elapsed(spc_press_timer) >= SPC_HOLD_TIME &&
+        vim_mode_enabled() && get_vim_mode() == NORMAL_MODE && !replace_active && get_mods() == 0) {
         register_code(KC_BTN1);
         spc_holding = true;
     }
