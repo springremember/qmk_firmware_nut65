@@ -115,6 +115,17 @@ bool process_vim_mode(uint16_t keycode, const keyrecord_t *record) {
         const uint8_t oneshot_mods = get_oneshot_mods();
         // hoping this gets optimized away by the compiler
         const uint8_t all_mods = mods | oneshot_mods;
+
+        // Insert mode hot path: a plain unmodified key in the typeable range
+        // needs no vim reinterpretation - let it through untouched (shortens the
+        // per-keystroke path that used to repack and clear/restore the mods on
+        // every character). Esc is excluded: it must still reach the insert
+        // handler so it can switch back to Normal mode.
+        if (get_vim_mode() == INSERT_MODE && all_mods == 0 &&
+            keycode >= KC_A && keycode <= KC_CAPS_LOCK && keycode != KC_ESC) {
+            return true;
+        }
+
         // this takes mod bits adds them to to the keycode, but always as the left mod (lower 4 mod bits)
         // for some reason with AVR gcc 8.3.0, the compile size is larger if you use a |= ???
         keycode = all_mods & 0xF0 ? keycode | (all_mods << 4) : keycode | (all_mods << 8);

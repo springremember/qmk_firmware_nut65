@@ -17,12 +17,14 @@ void register_motion(uint16_t keycode, const keyrecord_t *record) {
     if (record->event.pressed) {
 #ifdef VIM_NUMBERED_JUMPS
         extern int16_t motion_counter;
-        if (motion_counter > 1) {
+        if (motion_counter > 0) {
+            // Counted step: emit a single discrete tap and let the
+            // DO_NUMBERED_ACTION loop in process_motions call us again for each
+            // of the remaining steps (it decrements motion_counter to 0, so the
+            // count is fully consumed and cannot leak into the next command).
             tap_code16(keycode);
-            motion_counter = 0; // consume the count, it belongs to this motion
             return;
         }
-        motion_counter = 0; // plain motion also consumes any pending count
 #endif
         register_code16(keycode);
     } else {

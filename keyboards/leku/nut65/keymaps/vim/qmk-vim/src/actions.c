@@ -95,8 +95,11 @@ static bool process_vim_action(uint16_t keycode, const keyrecord_t *record) {
             }
             return false;
         }
-        // if nothing happened, return to normal mode
+        // A non-motion, non-action key aborts the pending operator. Real vim
+        // still executes that key as a fresh Normal-mode command, so hand it
+        // back to the normal mode handler instead of swallowing it.
         normal_mode();
+        return process_normal_mode(keycode, record);
     }
 
     return false;

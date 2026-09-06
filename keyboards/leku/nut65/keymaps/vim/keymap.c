@@ -146,8 +146,11 @@ void keyboard_post_init_user(void) {
     rgb_matrix_set_flags_noeeprom(LED_FLAG_KEYLIGHT | LED_FLAG_MODIFIER | LED_FLAG_UNDERGLOW);
 }
 
-/* ===== Esc visual exit tracking ===== */
-static bool esc_visual_exit = false;
+/* ===== Esc release-swallow flag =====
+ * Set when a mode exit already happened on Esc's press (visual exit handed to
+ * qmk-vim, or leaving replace mode) so the matching release is swallowed and
+ * does not emit a second, spurious real Esc. */
+static bool esc_swallow_release = false;
 
 /* ===== Esc tap/hold: short tap = real Esc, long press = Normal mode ===== */
 #define ESC_HOLD_TIME 200
@@ -410,6 +413,15 @@ static void sql_trigger_completion(void) {
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     bool pw_ok = (wireless_get_current_devs() != PW_DEVS_USB); // combo only off-wire
 
+    // Snapshot the volatile state once per event so every branch below reads
+    // the same consistent values (O1: avoids repeated get_mods()/mode calls in
+    // the per-keystroke path). None of the branches mutate this state and then
+    // rely on the changed value later in the same event - each one that does
+    // (Esc->Normal, Caps toggle, i/a/o->insert ...) returns immediately.
+    const uint8_t mods    = get_mods();
+    const bool    vim_on  = vim_mode_enabled();
+    const uint8_t vmode   = get_vim_mode();
+
     // ---- Original Insert key (row0 col14): third key of the power combo
     // (Ctrl + Right Alt + Ins). Swallowed while the combo is pending so no
     // key leaks; normal Delete / Insert otherwise. ----
@@ -459,8 +471,8 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // constants are QMK's 5-bit packed encoding (MOD_RSFT=0x12 would match
     // Left-Shift 0x02 and Right-Ctrl 0x10 instead!). Always mask with the
     // 8-bit MOD_BIT_* constants here.
-    if ((keycode == KC_ESC) && (get_mods() & MOD_BIT_LSHIFT) &&
-        !(get_mods() & (MOD_BIT_LCTRL | MOD_BIT_RCTRL | MOD_BIT_LALT | MOD_BIT_RALT | MOD_BIT_LGUI | MOD_BIT_RGUI))) {
+    if ((keycode == KC_ESC) && (mods & MOD_BIT_LSHIFT) &&
+        !(mods & (MOD_BIT_LCTRL | MOD_BIT_RCTRL | MOD_BIT_LALT | MOD_BIT_RALT | MOD_BIT_LGUI | MOD_BIT_RGUI))) {
         // Left Shift + Esc = ~ (Right Shift may also be held); Right-Shift-only
         // + Esc falls through to the combo block below and sends grave.
         // All other modifiers still let Esc through.
@@ -472,7 +484,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         }
         return false;
     }
-    if ((get_mods() & MOD_BIT_RSHIFT) &&
+    if ((mods & MOD_BIT_RSHIFT) &&
         (keycode == KC_ESC || (keycode >= KC_1 && keycode <= KC_0) || keycode == KC_MINS || keycode == KC_EQL)) {
         if (record->event.pressed) {
             uint16_t repl;
@@ -495,13 +507,15 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     }
 
     // ---- Right Shift + WASD = media keys: A/D = volume down/up,
-    // W/S = brightness up/down. Press requires Right Shift; release
-    // always unregisters (even if Right Shift was let go first) so the
-    // media key can never stick. Arrows keep their normal behaviour. ----
+    // W/S = brightness up/down. Works in any mode, but only when Right Shift
+    // is the *sole* modifier - any other modifier (Ctrl/Alt/Gui/Left Shift)
+    // keeps the ordinary shifted key so chords like Ctrl+Shift+A are never
+    // swallowed. Release always unregisters (even if Right Shift was let go
+    // first) so the media key can never stick. Arrows keep their behaviour. ----
     if (keycode == KC_A || keycode == KC_D || keycode == KC_W || keycode == KC_S) {
         static bool rsft_wasd_active = false;
         if (record->event.pressed) {
-            if (get_mods() & MOD_BIT_RSHIFT) {
+            if (mods == MOD_BIT_RSHIFT) {
                 rsft_wasd_active = true;
                 switch (keycode) {
                     case KC_A: register_code(KC_VOLD); break; // volume down
@@ -525,13 +539,15 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // long press (>=200ms, decided on release) switches the firmware to
     // Normal mode without sending a key. Visual modes hand the tap to
     // qmk-vim (native exit); replace mode exits on the press.
-    if (keycode == KC_ESC && vim_mode_enabled()) {
+    if (keycode == KC_ESC && vim_on) {
         if (record->event.pressed) {
-            if (get_vim_mode() == VISUAL_MODE || get_vim_mode() == VISUAL_LINE_MODE) {
+            if (vmode == VISUAL_MODE || vmode == VISUAL_LINE_MODE) {
                 // real Esc handed to qmk-vim to leave visual selection
-                esc_visual_exit = true;
+                esc_swallow_release = true;
             } else if (replace_active) {
-                normal_mode(); // leave replace mode
+                normal_mode();     // leave replace mode
+                esc_swallow_release = true; // swallow this Esc's release too (no
+                                        // spurious real Esc sent after the exit)
                 return false;
             } else {
                 // Cancel any pending vim operator (d/y/c ... awaiting a motion
@@ -539,16 +555,16 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                 // resets process_func so a following key cannot be eaten by the
                 // half-typed action. Insert mode is untouched (it must keep
                 // typing and only deliver the real Esc to the host).
-                if (get_vim_mode() != INSERT_MODE) {
+                if (vmode != INSERT_MODE) {
                     normal_mode();
                 }
-                esc_visual_exit = false;
+                esc_swallow_release = false;
                 esc_press_timer = timer_read(); // decide tap vs hold on release
                 return false;
             }
         } else {
-            if (esc_visual_exit) {
-                esc_visual_exit = false;
+            if (esc_swallow_release) {
+                esc_swallow_release = false;
                 return false;
             }
             if (esc_press_timer && timer_elapsed(esc_press_timer) >= ESC_HOLD_TIME) {
@@ -574,7 +590,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             }
             return false;
         }
-        if (!vim_mode_enabled()) {
+        if (!vim_on) {
             return true; // vim off: Caps acts as normal Caps Lock
         }
         if (record->event.pressed) {
@@ -592,9 +608,11 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // pointer (hjkl stays the text cursor), Space short = left click,
     // Space long (>=200ms) = hold left button (drag), Left+Right arrows
     // pressed together = right click. Only without modifiers, so
-    // Shift+arrow etc. keep their plain behaviour; Insert and Visual
-    // modes are untouched. Enter stays a normal Enter. ----
-    if (vim_mode_enabled() && get_vim_mode() == NORMAL_MODE && get_mods() == 0) {
+    // Shift+arrow etc. keep their plain behaviour. Runs purely in Normal mode:
+    // not in Insert, Visual or replace-typing (replace keeps vim_current_mode
+    // = NORMAL internally, so replace is excluded explicitly), and Enter stays
+    // a normal Enter. ----
+    if (vim_on && vmode == NORMAL_MODE && !replace_active && mods == 0) {
         uint16_t ms = 0;
         switch (keycode) {
             case KC_UP:   ms = KC_MS_UP;   break;
@@ -654,14 +672,14 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 
     // ---- Alt+Tab: pass Tab through with the held Alt so the task switcher
     // stays open; vim normal mode would tap LALT(Tab), releasing Alt. ----
-    if (keycode == KC_TAB && (get_mods() & MOD_MASK_ALT)) {
+    if (keycode == KC_TAB && (mods & MOD_MASK_ALT)) {
         return true;
     }
 
     // ---- SQL completion trigger: Ctrl+P expands the tracked keyword.
     // Typing contexts only (Insert mode or vim off). ----
-    if (record->event.pressed && keycode == KC_P && (get_mods() & MOD_MASK_CTRL) &&
-        (!vim_mode_enabled() || get_vim_mode() == INSERT_MODE)) {
+    if (record->event.pressed && keycode == KC_P && (mods & MOD_MASK_CTRL) &&
+        (!vim_on || vmode == INSERT_MODE)) {
         sql_trigger_completion();
         return false;
     }
@@ -672,7 +690,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 
     // Insert mode digit keys: plain digits pass straight through (no more
     // long-press F-row). Ctrl+digit still emits Ctrl+F1..F10.
-    if (get_vim_mode() == INSERT_MODE && keycode >= KC_1 && keycode <= KC_0 && (get_mods() & MOD_MASK_CTRL) && record->event.pressed) {
+    if (vmode == INSERT_MODE && keycode >= KC_1 && keycode <= KC_0 && (mods & MOD_MASK_CTRL) && record->event.pressed) {
         uint8_t num = (keycode == KC_0) ? 10 : (keycode - KC_1 + 1);
         tap_code(KC_F1 + num - 1);
         return false;

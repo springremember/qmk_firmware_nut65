@@ -9,6 +9,9 @@ extern process_func_t process_func;
 // forward declare from vim.h
 void disable_vim_mode(void);
 
+// live HID report - used to only clear held keys that actually exist
+extern report_keyboard_t *keyboard_report;
+
 vim_mode_t vim_current_mode;
 vim_mode_t get_vim_mode(void) {
     return vim_current_mode;
@@ -422,8 +425,16 @@ void insert_mode_user(void) {
 void insert_mode(void) {
     insert_mode_user();
     vim_current_mode = INSERT_MODE;
-    // need to clear motion keys if they are currently pressed
-    clear_keyboard();
+    // Drop held motion keys only when there actually are some: entering insert
+    // from a single command tap (i/a/o/...) must not wipe a concurrently held
+    // key/modifier mid-chord. When nothing else is down this is a no-op anyway.
+    bool held = keyboard_report->mods != 0;
+    for (uint8_t k = 0; k < KEYBOARD_REPORT_KEYS && !held; k++) {
+        held = keyboard_report->keys[k] != 0;
+    }
+    if (held) {
+        clear_keyboard();
+    }
     process_func = process_insert_mode;
 }
 
